@@ -1342,7 +1342,7 @@ async def clear_user_cache(user_id: str):
     """ZOMBIE FUNCTION: Duplicate exists in routes/auth.py. Used by legacy endpoints in main.py."""
     try:
         res = await core.resources.http_client.get(
-            f"{SUPABASE_URL}/rest/v1/projects?select=id&user_id=eq.{user_id}",
+            f"{SUPABASE_URL}/rest/v1/projects?select=id&user_id=eq.{user_id}&status=neq.deleted",
             headers=get_supabase_headers()
         )
         res.raise_for_status()
@@ -1805,7 +1805,7 @@ async def management_create_project(request: Request, req: ProjectCreateRequest,
         subscription_res = await core.resources.http_client.get(
             f"{SUPABASE_URL}/rest/v1/subscriptions",
             params={
-                "select": "tier,status",
+                "select": "plan_tier,status",
                 "user_id": f"eq.{user_id}",
                 "status": "eq.active",
                 "limit": "1"
@@ -1818,7 +1818,7 @@ async def management_create_project(request: Request, req: ProjectCreateRequest,
         # Determine tier (default: free)
         tier = 'free'
         if subscriptions and len(subscriptions) > 0:
-            tier = subscriptions[0].get('tier', 'free')
+            tier = subscriptions[0].get('plan_tier') or 'free'
         
         # Keep in sync with packages/ui/src/app/pricing/page.tsx (plan limits page)
         # and packages/engine/routes/billing.py PLAN_LIMITS
@@ -2089,6 +2089,7 @@ async def management_create_key(
             params={
                 "select": "organization_id",
                 "id": f"eq.{project_id}",
+                "status": "neq.deleted",
                 "limit": "1"
             },
             headers=get_supabase_headers()
@@ -2216,6 +2217,7 @@ async def management_list_keys(
                 params={
                     "select": "id,organization_id",
                     "organization_id": f"in.({','.join(org_ids)})",
+                    "status": "neq.deleted",
                     "order": "created_at.asc",
                     "limit": "1"
                 },
@@ -2236,6 +2238,7 @@ async def management_list_keys(
                 params={
                     "select": "organization_id",
                     "id": f"eq.{project_id}",
+                    "status": "neq.deleted",
                     "limit": "1"
                 },
                 headers=get_supabase_headers()
@@ -2304,6 +2307,7 @@ async def management_delete_key(
             params={
                 "select": "organization_id",
                 "id": f"eq.{project_id}",
+                "status": "neq.deleted",
                 "limit": "1"
             },
             headers=get_supabase_headers()
@@ -2400,6 +2404,7 @@ async def management_stats(
                 params={
                     "select": "id,organization_id",
                     "organization_id": f"in.({','.join(org_ids)})",
+                    "status": "neq.deleted",
                     "order": "created_at.asc",
                     "limit": "1"
                 },
@@ -2420,6 +2425,7 @@ async def management_stats(
                 params={
                     "select": "organization_id",
                     "id": f"eq.{project_id}",
+                    "status": "neq.deleted",
                     "limit": "1"
                 },
                 headers=get_supabase_headers()

@@ -149,6 +149,18 @@ def test_creating_a_project_inserts_a_row_without_a_cap(stack):
     assert db.writes() == [("POST", "projects", {}, {"organization_id": "org-1", "user_id": "user-1", "name": "Second"})]
     count = [c for c in db.calls if c[1] == "projects" and c[2].get("select") == "id"]
     assert count and count[0][2].get("status") == "neq.deleted"  # deleted projects do not count toward the cap
+    # The tier column is plan_tier: "tier" made PostgREST answer 400 and the route 500.
+    subs = [c for c in db.calls if c[1] == "subscriptions"]
+    assert subs and subs[0][2].get("select") == "plan_tier,status"
+
+
+def test_no_key_is_made_for_a_deleted_project(stack):
+    client, db, order = stack(project_found=False)
+    r = client.post("/management/key?projectId=gone&name=again", headers=CSRF)
+    assert r.status_code == 404, r.text
+    assert db.writes() == []
+    lookups = [c[2] for c in db.calls if c[1] == "projects"]
+    assert lookups and all(p.get("status") == "neq.deleted" for p in lookups)
 
 
 @pytest.mark.parametrize("call", [

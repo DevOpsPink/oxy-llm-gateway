@@ -187,7 +187,7 @@ async def get_session_key_context(creds: HTTPAuthorizationCredentials) -> CacheD
         res = await resources.http_client.get(
             f"{SUPABASE_URL}/rest/v1/projects",
             params={"select": "id,budget_limit", "organization_id": f"eq.{org_id}",
-                    "order": "created_at.asc", "limit": "1"},
+                    "status": "neq.deleted", "order": "created_at.asc", "limit": "1"},
             headers=get_supabase_headers(),
             timeout=5.0,
         )

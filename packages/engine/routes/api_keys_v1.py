@@ -33,6 +33,7 @@ async def _org_project_ids(org_id: str) -> List[str]:
         params={
             "organization_id": f"eq.{org_id}",
             "select": "id",
+            "status": "neq.deleted",
             "limit": "200",
         },
         headers=get_supabase_headers(),

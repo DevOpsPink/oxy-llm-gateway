@@ -1776,7 +1776,9 @@ BEGIN
     JOIN projects p ON k.project_id = p.id
     WHERE k.key_hash = p_key_hash 
     AND k.is_active = true
-    AND (k.expires_at IS NULL OR k.expires_at > now());
+    AND (k.expires_at IS NULL OR k.expires_at > now())
+    -- A deleted project is deactivated, not erased: its keys never authenticate.
+    AND COALESCE(p.status, 'active') <> 'deleted';
 END;
 $$;
 
