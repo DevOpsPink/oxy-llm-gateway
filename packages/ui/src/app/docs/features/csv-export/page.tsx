@@ -102,7 +102,7 @@ export default function CSVExportDocs() {
             <p className="text-sm text-violet-700">
               The export returns whatever rows are still stored. Each organization has a
               <code> request_log_retention_days</code> value (7 to 2555, default 365), read and set through
-              <code> GET</code>/<code>POST /v1/privacy</code>. Rows past the window are deleted only when the operator runs
+              <code> GET</code>/<code>POST /v1/privacy</code> (changing it needs an owner or admin). Rows past the window are deleted only when the operator runs
               the <code>fn_enforce_request_log_retention()</code> database function or the
               <code> workers/log_retention.py</code> job; the repository does not schedule either.
             </p>

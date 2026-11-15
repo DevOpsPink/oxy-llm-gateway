@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from types import SimpleNamespace
 
 from routes.guardrails import router as guardrails_router
+from tests._roles import RoleAwareClient
 from routes.proxy import router as proxy_router
 
 
@@ -63,6 +64,8 @@ def build_app(orgs):
     g.get_user_and_key_from_api_key = lambda: fake_get_user_and_key()  # type: ignore
     p.get_user_and_key_from_api_key = lambda: fake_get_user_and_key()  # type: ignore
 
+    # The caller owns the organization: require_org_admin lets the guardrails change.
+    g.resources.http_client = RoleAwareClient(g.resources.http_client, "owner")  # type: ignore
     fake_sb = FakeSupabase(orgs)
     g.resources.supabase = fake_sb  # type: ignore
     p.resources.supabase = fake_sb  # type: ignore

@@ -107,7 +107,8 @@ export default function GuardrailsDocs() {
               language="json"
               code={`// GET  /v1/guardrails   reads the current state
 // POST /v1/guardrails   changes it; send only the fields to change
-// Both take an Oxy API key: Authorization: Bearer oxy_live_...
+// Both take an Oxy API key (Authorization: Bearer oxy_live_...) or the dashboard's session;
+// POST needs an owner or admin of the organization (403 otherwise)
 {
   "paused": true,
   "auto_suspend_on_cost_spikes": true

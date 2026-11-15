@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from tests._roles import RoleAwareClient
+
 from routes.notifications_v1 import router as notif_router, ALLOWED_EVENTS
 
 
@@ -55,7 +57,8 @@ def build_app(settings=None, webhooks=None):
             self.last_patch = (params, json)
             return type("R", (), {"status_code": 200, "json": lambda: [{"id": "wh_1"}], "raise_for_status": lambda: None})
 
-    n.resources.http_client = FakeHttpClient(settings, webhooks)  # type: ignore
+    # The caller owns the organization: require_org_admin lets organization settings change.
+    n.resources.http_client = RoleAwareClient(FakeHttpClient(settings, webhooks), "owner")  # type: ignore
     return app
 
 

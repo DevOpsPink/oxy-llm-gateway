@@ -350,7 +350,7 @@ const stack: { label: string; value: string }[] = [
   { label: 'Frontend', value: 'Next.js (App Router), TypeScript strict, Tailwind, Radix' },
   { label: 'Data', value: 'Postgres 16, PostgREST 12, GoTrue v2, Redis 7' },
   { label: 'Infra', value: 'docker-compose, nginx (URL-shape adapter), Caddy for prod TLS' },
-  { label: 'Tests', value: '397 offline pytest cases, Vitest + Playwright on the UI' },
+  { label: 'Tests', value: '427 offline pytest cases, Vitest + Playwright on the UI' },
 ]
 
 const comparison = [

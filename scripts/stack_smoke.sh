@@ -96,6 +96,11 @@ for path in \
 done
 [ "$PAGES_FAILED" = 0 ] || fail "$PAGES_FAILED dashboard routes refused a signed-in session"
 echo "every route the dashboard reads answers the session"
+# Organization settings change only by an owner or admin; the onboarded user owns the organization.
+code="$(printf 'header = "Authorization: Bearer %s"\n' "$ACCESS_TOKEN" | curl_h -o /dev/null -w '%{http_code}' \
+  -X POST "$API_URL/v1/guardrails" -H "X-CSRF-Token: $CSRF" -b "csrf_token=$CSRF" -H 'Content-Type: application/json' --data '{}')"
+[ "$code" = 200 ] || fail "the organization's owner could not save its guardrails with a session (HTTP $code)"
+echo "the owner's session saves organization settings"
 
 step "request through the gateway"
 REPLY="$(printf 'header = "Authorization: Bearer %s"\n' "$OXY_API_KEY" | curl_h -X POST "$API_URL/v1/chat/completions" \

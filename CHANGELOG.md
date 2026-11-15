@@ -13,6 +13,7 @@
 - An agent session's detail no longer fails on its timeline: it filtered `request_logs` by a column that does not exist (`agent_session_id`; the column is `session_id`).
 
 - The dashboard's pages work with the signed-in session. Fifteen `/v1` routes the dashboard reads (audit log, requests, attribution, billing overview, guardrails, notifications, webhooks, organization, privacy, providers, setup, intelligence, export, cost optimizer, prompts, team) took only an Oxy API key, so every one of those pages answered 401; they now also accept the session of an active member of the organization, and the gateway itself still takes keys only. The smoke test calls every route the dashboard reads with a session.
+- Organization settings change only by an owner or admin of the organization: privacy, guardrails, providers, the organization's profile, notification settings, webhooks and team invitations. Before, any member's Oxy API key could change them (a key acts as the member who created it), and with the dashboard's session any signed-in member could have. A developer or viewer now gets 403, and so does everyone when the role cannot be read (503). `tests/test_org_settings_roles.py` sends a developer, a viewer and a non-member to each of the nine routes that change these settings; the smoke test saves guardrails as the owner.
 - `/organizations` returned an empty list for everyone (it read a nested field that is merged in), `/v1/agents` failed with 500 (the PostgREST client had no `range`), and `/v1/guardrails`, `/v1/requests` and parts of `/v1/intelligence` failed (calls not awaited, request parameters not typed). Saving notification settings a second time no longer collides with the first row.
 - The dashboard's CSV export uses `/v1/exports/requests.csv`; `/api/v1/reports/export` read a table that does not exist and is removed.
 - Another organization can no longer stop a session through `DELETE /v1/agents/{agent_id}/sessions/{session_id}`: the kill flag was set before the organization was checked.
@@ -22,7 +23,7 @@
 
 ### Tests
 
-- Every offline test runs in CI, 397 in all (one more skips itself without a live key), not a hand-picked list. The tests that failed on stale fakes are fixed; new tests cover the dashboard session, the cross-organization kill and the per-organization cache, each also run against the old code to see it fail.
+- Every offline test runs in CI, 427 in all (one more skips itself without a live key), not a hand-picked list. The tests that failed on stale fakes are fixed; new tests cover the dashboard session, the cross-organization kill, the per-organization cache and the owner-or-admin check on organization settings, each also run against the old code to see it fail.
 
 ### Documentation
 

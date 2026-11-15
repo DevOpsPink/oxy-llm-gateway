@@ -231,10 +231,11 @@ curl "http://localhost:8000/management/team/invites?organization_id=<org uuid>" 
 curl -X DELETE http://localhost:8000/management/team/invite/<invite uuid> \\
   -H "Authorization: Bearer <jwt_token>"
 
-# Same with an Oxy API key (Bearer oxy_live_...), no role check:
+# Same with an Oxy API key (Bearer oxy_live_...) or the dashboard's session; creating and
+# revoking an invite needs an owner or admin of the organization (403 otherwise):
 # GET    /v1/team                      -> {"members": [...], "invites": [...]}
 # POST   /v1/team/invites              {"email", "role"} -> the invite row; no email is sent
-#        (role developer or viewer: the default member, and admin, fail the database check with 500)
+#        (role developer, the default, or viewer; any other role answers 422)
 # DELETE /v1/team/invites/{invite_id}  -> {"status": "ok"}`}
             />
           </div>

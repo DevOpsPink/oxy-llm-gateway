@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from tests._roles import RoleAwareClient
+
 from routes.team_v1 import router as team_router
 
 
@@ -55,7 +57,8 @@ def build_app(members, invites):
             updated = {"email": "a@b.com"}
             return type("R", (), {"status_code": 200, "json": lambda: [updated], "raise_for_status": lambda: None})
 
-    t.resources.http_client = FakeHttpClient(members, invites)  # type: ignore
+    # The caller owns the organization: require_org_admin lets organization settings change.
+    t.resources.http_client = RoleAwareClient(FakeHttpClient(members, invites), "owner")  # type: ignore
     return app
 
 

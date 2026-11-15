@@ -88,7 +88,8 @@ export default function WebhooksDocs() {
             <p className="text-slate-600 mb-4">
               Alerts go to the URLs in your notification settings. <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">GET</code> and
               <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm"> POST /v1/notifications/settings</code> take an Oxy API key or
-              the dashboard&apos;s signed-in session. Each URL must start with its service&apos;s prefix
+              the dashboard&apos;s signed-in session; changing the settings, and creating or deleting a webhook, needs an
+              owner or admin of the organization (403 otherwise). Each URL must start with its service&apos;s prefix
               (<code>https://hooks.slack.com/</code>, <code>https://discord.com/api/webhooks/</code> or
               <code> https://discordapp.com/api/webhooks/</code>, <code>https://hooks.zapier.com/</code>) when that channel
               is enabled, or the call gets a 400.

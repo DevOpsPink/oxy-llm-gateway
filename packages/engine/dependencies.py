@@ -210,6 +210,33 @@ async def get_session_key_context(creds: HTTPAuthorizationCredentials) -> CacheD
     }
 
 
+async def require_org_admin(key_data: CacheData) -> None:
+    """Organization-wide settings change only by an owner or admin.
+
+    The person is the session's user, or the creator of the Oxy API key used
+    (key_data["user_id"] is the key's created_by). Members with the developer
+    role read these settings and create keys, but do not change privacy,
+    guardrails, providers, the organization, notifications or invitations.
+    Fails closed: if the role cannot be read, the change is refused.
+    """
+    try:
+        res = await resources.http_client.get(
+            f"{SUPABASE_URL}/rest/v1/organization_members",
+            params={"select": "role", "user_id": f"eq.{key_data.get('user_id')}",
+                    "organization_id": f"eq.{key_data.get('organization_id')}",
+                    "status": "eq.active", "limit": "1"},
+            headers=get_supabase_headers(),
+            timeout=5.0,
+        )
+        res.raise_for_status()
+        rows = res.json() or []
+    except Exception as e:
+        log_error_safe(log, "org_role_lookup_failed", e)
+        raise HTTPException(status_code=503, detail="Could not check the caller's role")
+    if not rows or rows[0].get("role") not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Only an owner or admin of the organization can change this")
+
+
 def build_api_key_dependency(
     resolver_getter: Callable[[], Callable[..., Awaitable[CacheData] | CacheData]],
     allow_session: bool = False,

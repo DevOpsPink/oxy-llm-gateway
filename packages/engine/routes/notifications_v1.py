@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from core import resources, SUPABASE_URL, log
 from core.audit import log_admin_event
-from dependencies import CacheData, build_api_key_dependency, get_user_and_key_from_api_key, get_supabase_headers
+from dependencies import CacheData, build_api_key_dependency, get_user_and_key_from_api_key, get_supabase_headers, require_org_admin
 
 router = APIRouter(prefix="/v1", tags=["notifications"])
 # The dashboard calls these routes with its session; scripts with an Oxy API key.
@@ -137,6 +137,7 @@ async def update_notification_settings(
     body: NotificationSettingsRequest,
     key_data: CacheData = Depends(api_key_dependency),
 ):
+    await require_org_admin(key_data)
     org_id = key_data["organization_id"]
     current = await _fetch_settings(org_id)
     payload = body.model_dump()
@@ -216,6 +217,7 @@ async def create_webhook(
     body: WebhookCreateRequest,
     key_data: CacheData = Depends(api_key_dependency),
 ):
+    await require_org_admin(key_data)
     org_id = key_data["organization_id"]
     user_id = key_data["user_id"]
     secret = secrets.token_hex(16)
@@ -249,6 +251,7 @@ async def create_webhook(
 
 @router.delete("/webhooks/{webhook_id}")
 async def delete_webhook(webhook_id: str, key_data: CacheData = Depends(api_key_dependency)):
+    await require_org_admin(key_data)
     org_id = key_data["organization_id"]
     res = await resources.http_client.patch(
         f"{SUPABASE_URL}/rest/v1/webhooks",

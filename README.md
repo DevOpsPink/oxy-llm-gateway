@@ -16,7 +16,7 @@ The last two badges are not typed by hand: they are CI's proofs over the last 30
 
 A complete control plane for LLM traffic, split across:
 
-- **`packages/engine`** — FastAPI gateway exposing an OpenAI-compatible `/v1/chat/completions` endpoint with provider routing (OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint through `OPENAI_API_BASE`), per-project budgets, response caching, DLP, kill switch, audit logs, and cost attribution. 397 offline unit tests.
+- **`packages/engine`** — FastAPI gateway exposing an OpenAI-compatible `/v1/chat/completions` endpoint with provider routing (OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint through `OPENAI_API_BASE`), per-project budgets, response caching, DLP, kill switch, audit logs, and cost attribution. 427 offline unit tests.
 - **`packages/ui`** — Next.js dashboard for keys, agents, budgets, privacy modes, audit logs, billing, intelligence, and playground.
 - **`db/`** — Postgres golden schema plus a Supabase-compatibility shim so the same code runs on either a hosted Supabase project or a local self-hosted stack.
 - **`docker-compose.yml`** — the local stack: Postgres, PostgREST, GoTrue (auth), Mailpit (local mail for magic links), nginx (URL-shape adapter), Redis, the engine with six background workers, and the UI.
@@ -210,7 +210,7 @@ Every number in this table comes from one run: CI run [43743799006](https://gith
 - Frontend: Next.js 16 (App Router, Turbopack), TypeScript strict, supabase-js + `@supabase/ssr`, Radix UI primitives, Tailwind
 - Data: Postgres 16, PostgREST 12, GoTrue (Supabase Auth) v2
 - Infra: docker-compose, nginx (path adapter), Caddy for TLS
-- Tests: pytest (397 offline tests), Playwright + Vitest on the UI
+- Tests: pytest (427 offline tests), Playwright + Vitest on the UI
 
 ## Repository layout
 
@@ -235,7 +235,7 @@ oxy/
 ## Running the tests
 
 ```bash
-make test-core          # 397 offline unit tests, a few seconds
+make test-core          # 427 offline unit tests, a few seconds
 make test-integration   # requires a running engine + live external services
 ```
 

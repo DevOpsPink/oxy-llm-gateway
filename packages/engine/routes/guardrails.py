@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from core import resources
 from core.control import cache_org_status
-from dependencies import CacheData, build_api_key_dependency, get_user_and_key_from_api_key
+from dependencies import CacheData, build_api_key_dependency, get_user_and_key_from_api_key, require_org_admin
 from core.audit import log_admin_event
 
 router = APIRouter(prefix="/v1", tags=["guardrails"])
@@ -51,6 +51,7 @@ async def update_guardrails(
     payload: GuardrailsUpdate,
     key_data: CacheData = Depends(api_key_dependency),
 ):
+    await require_org_admin(key_data)
     org_id = key_data["organization_id"]
     current = await _get_org_guardrails(org_id)
 

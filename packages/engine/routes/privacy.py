@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from core import resources, SUPABASE_URL, log
-from dependencies import CacheData, build_api_key_dependency, get_user_and_key_from_api_key, get_supabase_headers
+from dependencies import CacheData, build_api_key_dependency, get_user_and_key_from_api_key, get_supabase_headers, require_org_admin
 from core.audit import log_admin_event
 
 router = APIRouter(prefix="/v1/privacy", tags=["privacy"])
@@ -52,6 +52,7 @@ async def update_privacy_settings(
     body: PrivacyUpdateRequest,
     key_data: CacheData = Depends(api_key_dependency),
 ):
+    await require_org_admin(key_data)
     org_id = key_data["organization_id"]
     current = await _fetch_org(org_id)
     updates = {}

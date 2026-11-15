@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from core import resources, SUPABASE_URL, log
 from core.audit import log_admin_event
-from dependencies import CacheData, build_api_key_dependency, get_user_and_key_from_api_key, get_supabase_headers
+from dependencies import CacheData, build_api_key_dependency, get_user_and_key_from_api_key, get_supabase_headers, require_org_admin
 
 router = APIRouter(prefix="/v1/providers", tags=["providers"])
 # The dashboard calls these routes with its session; scripts with an Oxy API key.
@@ -59,6 +59,7 @@ async def update_provider_config(
     body: Dict[str, Any],
     key_data: CacheData = Depends(api_key_dependency),
 ):
+    await require_org_admin(key_data)
     org_id = key_data["organization_id"]
     user_id = key_data["user_id"]
     current_row = await _fetch_org(org_id)
