@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,6 +29,7 @@ interface SSOConfigPanelProps {
 }
 
 export function SSOConfigPanel({ organizationId }: SSOConfigPanelProps) {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<any>(null)
   const [domain, setDomain] = useState('')
@@ -107,7 +109,7 @@ export function SSOConfigPanel({ organizationId }: SSOConfigPanelProps) {
             description: 'SSO is enabled for orgs on the enterprise plan tier. The operator sets the tier in the database.',
             action: {
               label: 'Plan limits',
-              onClick: () => window.location.href = '/pricing'
+              onClick: () => router.push('/pricing')
             }
           })
           return
@@ -200,7 +202,7 @@ export function SSOConfigPanel({ organizationId }: SSOConfigPanelProps) {
 
         <CardFooter>
           <Button
-            onClick={() => window.location.href = '/pricing'}
+            onClick={() => router.push('/pricing')}
             className="w-full"
             size="lg"
           >

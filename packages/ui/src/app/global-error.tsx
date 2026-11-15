@@ -12,6 +12,7 @@
  */
 
 import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function GlobalError({
   error,
@@ -20,6 +21,7 @@ export default function GlobalError({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  const router = useRouter()
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       console.error('CRITICAL: Root-level error:', error)
@@ -204,7 +206,7 @@ export default function GlobalError({
               </button>
               
               <button
-                onClick={() => window.location.href = '/'}
+                onClick={() => router.push('/')}
                 style={{
                   padding: '12px 24px',
                   background: 'white',

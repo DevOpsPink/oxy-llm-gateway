@@ -9,6 +9,7 @@
  */
 
 import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Cpu, Home, RefreshCcw, AlertTriangle, ShieldCheck } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -37,6 +38,7 @@ export default function Error({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  const router = useRouter()
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       console.error('Application error:', {
@@ -166,7 +168,7 @@ export default function Error({
               </Button>
               <Button 
                 variant="outline"
-                onClick={() => window.location.href = '/dashboard'}
+                onClick={() => router.push('/dashboard')}
                 className="flex-1 border-slate-200 hover:bg-slate-100 rounded-xl transition-colors"
               >
                 <Home className="h-4 w-4 mr-2" />

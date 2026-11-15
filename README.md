@@ -271,7 +271,7 @@ Dependabot proposes patch and minor updates once a week, once a release is seven
 Major versions are not proposed: each is a migration, made by hand in its own pull request. A known vulnerability is not left to them: CI runs `pip-audit` on the engine's requirements and `pnpm audit` on the UI's production dependencies (high and critical) on every push and pull request and every day, and fails when it finds one, whether its fix is a major version or not. Held back on 2026-11-15, to be reviewed on **2027-02-15**:
 
 - base images: Python 3.12 (3.15 is out) and Node 22 LTS (26 is out);
-- engine: `anthropic` 2, `redis` 8, `stripe` 17, `structlog` 26, and for development `pytest` 9, `pytest-asyncio` 1, `pytest-cov` 7, `black` 26, `isort` 9, `mypy` 2;
+- engine: `anthropic` 2, `redis` 8, `stripe` 17, `structlog` 26 (and `redis` stays on 5.2: with 5.3, concurrent commands queue behind each timeout while Redis does not answer, and the fail-closed proof timed out), and for development `pytest` 9, `pytest-asyncio` 1, `pytest-cov` 7, `black` 26, `isort` 9, `mypy` 2;
 - UI: TypeScript 7, ESLint 10, Vite 8 with `@vitejs/plugin-react` 6, Vitest 5, jsdom 31, `@sentry/nextjs` 11, `framer-motion` 14, `lucide-react` 1, `sonner` 2, `@testing-library/jest-dom` 7, `@types/node` 26.
 
 ## License

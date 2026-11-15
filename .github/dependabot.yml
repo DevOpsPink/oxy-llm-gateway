@@ -32,6 +32,11 @@ updates:
     schedule:
       interval: weekly
     cooldown: { default-days: 7 }
+    # Pinned (==) versions move; a lower bound (>=, the development tools) moves
+    # only when the new version falls outside it. Raising a bound the latest
+    # release already satisfies came as one pull request per tool, with no
+    # update type for the merge workflow to read.
+    versioning-strategy: increase-if-necessary
     groups:
       engine:
         patterns: ["*"]
@@ -39,6 +44,12 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # redis-py 5.3 queues concurrent commands behind each timeout while Redis
+      # does not answer: ten calls took 6 to 10 s instead of 1 s, and the
+      # fail-closed proof timed out (Dependabot's #13, 2026-11-15). Held on 5.2;
+      # reviewed with the majors.
+      - dependency-name: "redis"
+        update-types: ["version-update:semver-minor"]
     commit-message:
       prefix: deps
 

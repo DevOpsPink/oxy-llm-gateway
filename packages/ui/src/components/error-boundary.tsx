@@ -9,6 +9,7 @@
  */
 
 import React from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card'
 import { AlertTriangle, RefreshCw, Home, Cpu, ShieldCheck } from 'lucide-react'
@@ -23,6 +24,25 @@ interface ErrorBoundaryState {
   hasError: boolean
   error: Error | null
   errorInfo: React.ErrorInfo | null
+}
+
+// Leaves the error for the dashboard through the router: the boundary clears
+// its error first, so the dashboard renders instead of this card again.
+function DashboardButton({ onLeave }: { onLeave: () => void }) {
+  const router = useRouter()
+  return (
+    <Button
+      onClick={() => {
+        onLeave()
+        router.push('/dashboard')
+      }}
+      variant="outline"
+      className="flex-1 border-slate-200 hover:border-violet-400 hover:text-violet-700 rounded-xl"
+    >
+      <Home className="h-4 w-4 mr-2" />
+      Dashboard
+    </Button>
+  )
 }
 
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
@@ -67,8 +87,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     window.location.reload()
   }
 
-  handleGoHome = () => {
-    window.location.href = '/dashboard'
+  handleLeave = () => {
+    this.setState({ hasError: false, error: null, errorInfo: null })
   }
 
   render() {
@@ -146,14 +166,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Try Again
                 </Button>
-                <Button 
-                  onClick={this.handleGoHome}
-                  variant="outline"
-                  className="flex-1 border-slate-200 hover:border-violet-400 hover:text-violet-700 rounded-xl"
-                >
-                  <Home className="h-4 w-4 mr-2" />
-                  Dashboard
-                </Button>
+                <DashboardButton onLeave={this.handleLeave} />
               </CardFooter>
             </Card>
           </div>

@@ -14,7 +14,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Menu, X, Home, LayoutDashboard, Settings, Users, CreditCard, FileText, LogOut, Shield, Activity, Key, Bell } from 'lucide-react'
@@ -31,13 +31,15 @@ interface MobileMenuProps {
 export function MobileMenu({ user }: MobileMenuProps) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
   const supabase = createClient()
 
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut()
       toast.success('Signed out successfully')
-      window.location.href = '/'
+      router.push('/')
+      router.refresh()
     } catch (error) {
       toast.error('Failed to sign out')
     }

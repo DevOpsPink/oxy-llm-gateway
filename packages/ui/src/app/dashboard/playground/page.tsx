@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { authenticatedFetch, handleApiError, safeErrorMessage } from '@/lib/api'
 import { Header } from '@/components/header'
@@ -25,6 +26,7 @@ const MODELS = [
 ]
 
 export default function PlaygroundPage() {
+  const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
   const [token, setToken] = useState<string | null>(null)
   const [model, setModel] = useState(MODELS[0])
@@ -225,7 +227,7 @@ export default function PlaygroundPage() {
                     {response.cost_usd && <div>Cost: ${response.cost_usd}</div>}
                   </div>
                   <div>
-                    <Button variant="link" className="px-0" onClick={() => window.location.href = '/dashboard/requests'}>
+                    <Button variant="link" className="px-0" onClick={() => router.push('/dashboard/requests')}>
                       Open Requests
                     </Button>
                   </div>

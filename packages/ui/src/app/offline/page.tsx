@@ -1,9 +1,11 @@
 'use client'
 
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { WifiOff, RefreshCw } from "lucide-react"
 
 export default function OfflinePage() {
+  const router = useRouter()
   const handleRetry = () => {
     window.location.reload()
   }
@@ -62,7 +64,7 @@ export default function OfflinePage() {
           </Button>
           
           <Button
-            onClick={() => window.location.href = '/dashboard'}
+            onClick={() => router.push('/dashboard')}
             variant="outline"
             className="w-full"
             size="lg"

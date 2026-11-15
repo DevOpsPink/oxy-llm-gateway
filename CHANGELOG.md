@@ -6,9 +6,12 @@
 
 - The UI's unit tests run on Vitest 4 (4.1.12, with `@vitest/coverage-v8` and `@vitest/ui` at the same version and Vite 7.3). Coverage names source files only (`src/lib/**/*.{ts,tsx}`, `src/hooks/**/*.{ts,tsx}`): Vitest 4 reports every file `coverage.include` matches, and `src/lib` holds a Markdown guide. Dependabot checks the pnpm workspace from its root alone; listing `packages/ui` as well opened a second pull request for each update, without the lockfile.
 - Dependabot proposes patch and minor updates only, once a release is seven days old, grouped per ecosystem, and `dependabot-automerge.yml` merges them once CI (the proofs and the devcontainer included) and CodeQL pass for the commit and every dependency moved is stated as patch or minor. Majors are held back until 2027-02-15; the README's "Dependencies" section lists them.
+- UI: `@supabase/ssr` 0.12, `lucide-react` 0.577, `eslint-config-next` 16.4.5, `critters` 0.0.25. Engine development tools: higher lower bounds for `pytest`, `pytest-asyncio`, `ruff` and `fakeredis`; Dependabot now moves a lower bound only when the new version falls outside it.
+- `redis` stays on 5.2. Dependabot's grouped update to 5.3.1 failed the fail-closed proof: with Redis paused, the refused requests had no answer within 60 s instead of a 503 within a second. Measured outside the gateway, ten concurrent commands against a paused Redis take 1 s on 5.2.1 and 6 to 10 s on 5.3.1.
 
 ### Fixed
 
+- Eight navigations to the app's own pages went through `window.location.href` (the error pages, the offline page, the playground, the SSO panel, sign-out); they use the Next router, which `eslint-config-next` 16.4 requires. The error card's Dashboard button clears the error before it navigates.
 - The devcontainer's proxy could start before the dashboard's container existed and stop with `host not found in upstream "ui"`, failing the devcontainer job at random; it now waits for that container to start.
 
 ## 1.0.1 — 2026-11-15
