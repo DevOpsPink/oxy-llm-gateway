@@ -14,6 +14,11 @@ services:
         condition: service_healthy
       nginx-postgrest:
         condition: service_healthy
+      # nginx resolves every proxy_pass host as it starts: without this it could
+      # start before the dashboard's container exists and exit with "host not
+      # found in upstream".
+      ui:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3080/engine/health"]
       interval: 5s

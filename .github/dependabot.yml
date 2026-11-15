@@ -1,6 +1,12 @@
 # Keeps the pinned GitHub Actions, the engine's and UI's dependencies and the
 # Dockerfiles' base images current.
-# Grouped: one pull request per ecosystem per week is a queue that gets read.
+#
+# Grouped, patch and minor only: one pull request per ecosystem per week, and
+# .github/workflows/dependabot-automerge.yml merges it once CI (proofs and the
+# devcontainer included) and CodeQL pass for its commit. Major versions are not
+# proposed: each is a migration made by hand, in its own pull request. The
+# README's "Dependencies" section lists the majors held back and the date they
+# are next reviewed.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -10,6 +16,10 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: ci
 
@@ -20,6 +30,10 @@ updates:
     groups:
       engine:
         patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: deps
 
@@ -33,10 +47,15 @@ updates:
     groups:
       ui:
         patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: deps
 
-  # Base images of Dockerfile.engine and Dockerfile.ui.
+  # Base images of Dockerfile.engine and Dockerfile.ui. Python stays on 3.12
+  # and Node on 22 (LTS): a new language line is a migration, not an update.
   - package-ecosystem: docker
     directory: /
     schedule:
@@ -44,5 +63,11 @@ updates:
     groups:
       base-images:
         patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "library/python"
+        update-types: ["version-update:semver-minor"]
     commit-message:
       prefix: deps

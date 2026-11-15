@@ -1,0 +1,138 @@
+name: Dependabot auto-merge
+
+# Merges a Dependabot pull request of patch and minor updates once both of this
+# repository's gates have finished green for its commit: CI (the engine tests,
+# the UI, the stack, the nine proofs with their planted violations and the
+# devcontainer) and CodeQL. It is triggered by CI, the slower of the two, and
+# checks the other. Major versions are never merged here: .github/dependabot.yml
+# does not propose them, and a pull request that lists one, or a dependency
+# whose update type is not stated, is left for a person.
+#
+# NOT `gh pr merge --auto`. That hands the decision to GitHub's auto-merge,
+# which waits for the checks a branch rule marks as REQUIRED. The protect-main
+# ruleset marks none (it forbids force-pushes and deleting main), so auto-merge
+# would merge at once, before the checks it was supposed to wait for.
+# Triggering on CI's own completion removes that dependency: if the run did
+# not conclude success, this job does nothing at all.
+#
+# The same workflow as heyvaldemar/cypress-cloud-triage-agent's, with the
+# update-type rule added.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+# Read at the top, write only where it is used: a top-level block would apply
+# to every job added later too.
+permissions:
+  contents: read
+
+jobs:
+  merge:
+    name: Merge the update if its checks passed
+    permissions:
+      contents: write
+      pull-requests: write
+      # To dispatch CI and CodeQL on main once the merge is in.
+      actions: write
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Merge, if this was Dependabot's patch or minor update and both gates are green
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          # The pull requests the run was for, its branch and who started it.
+          # Through the environment, never pasted into the script: a branch name
+          # is text whoever opens a pull request chooses.
+          PRS: ${{ toJSON(github.event.workflow_run.pull_requests) }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          ACTOR: ${{ github.event.workflow_run.actor.login }}
+        run: |
+          # The pull request comes from the event; the commit is asked about
+          # only when that list is empty, six times, twenty seconds apart.
+          pr="$(jq -r '.[0].number // empty' <<<"$PRS" 2>/dev/null || true)"
+          tries=0
+          while [ -z "$pr" ] && [ "$tries" -lt 6 ]; do
+            if [ "$tries" -gt 0 ]; then sleep 20; fi
+            tries=$((tries + 1))
+            pr="$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[0].number // empty' 2>/dev/null || true)"
+          done
+          if [ -z "$pr" ]; then
+            # A run Dependabot started with no pull request to be found is a
+            # failure, not "nothing to do": the update would wait where nobody looks.
+            if [ "$ACTOR" = "dependabot[bot]" ] && [ "${HEAD_BRANCH#dependabot/}" != "$HEAD_BRANCH" ]; then
+              echo "::error::CI passed at $SHA on $HEAD_BRANCH, and no pull request was found for it, in the event or in six lookups"
+              exit 1
+            fi
+            echo "no pull request at $SHA: nothing to do"
+            exit 0
+          fi
+
+          # What may be merged is decided by the pull request and its commit,
+          # not by the event: Dependabot's pull request, still open, whose head
+          # is the commit CI passed and was written by Dependabot.
+          info="$(gh api "repos/$REPO/pulls/$pr" --jq '"\(.state) \(.user.login) \(.head.sha)"')" \
+            || { echo "::error::#$pr could not be read"; exit 1; }
+          read -r state author head <<<"$info"
+          if [ "$author" != "dependabot[bot]" ]; then
+            echo "#$pr is $author's, not Dependabot's: not merging"
+            exit 0
+          fi
+          if [ "$state" != open ]; then
+            echo "#$pr is $state: nothing to merge"
+            exit 0
+          fi
+          if [ "$head" != "$SHA" ]; then
+            echo "::warning::#$pr is at $head now, and the run that passed was for $SHA: not merging"
+            exit 0
+          fi
+          commit_author="$(gh api "repos/$REPO/commits/$SHA" --jq '.author.login // empty')"
+          if [ "$commit_author" != "dependabot[bot]" ]; then
+            echo "::warning::#$pr's head commit is by '$commit_author', not Dependabot: not merging"
+            exit 0
+          fi
+
+          # PATCH AND MINOR ONLY. Dependabot lists every dependency it moved in
+          # the commit message, each with its update type. Every one must say
+          # semver-minor or semver-patch: a major, or a type not stated, leaves
+          # the pull request to a person.
+          message="$(gh api "repos/$REPO/commits/$SHA" --jq '.commit.message')"
+          deps="$(grep -c '^- dependency-name: ' <<<"$message" || true)"
+          small="$(grep -cE '^  update-type: version-update:semver-(minor|patch)$' <<<"$message" || true)"
+          if [ "$deps" -eq 0 ] || [ "$small" -ne "$deps" ]; then
+            echo "::notice::#$pr moves $deps dependencies, $small of them stated as patch or minor: left for a person"
+            exit 0
+          fi
+
+          # CI passed; CodeQL must have too. It is the faster of the two, so it
+          # has usually finished; if not, wait for it, up to ten minutes.
+          codeql=missing
+          for _ in $(seq 1 20); do
+            codeql="$(gh api "repos/$REPO/actions/workflows/codeql.yml/runs?head_sha=$SHA&event=pull_request" \
+                       --jq '.workflow_runs[0] | if . == null then "missing" elif .status != "completed" then "running" else .conclusion end')"
+            [ "$codeql" = running ] || [ "$codeql" = missing ] || break
+            sleep 30
+          done
+          if [ "$codeql" != success ]; then
+            echo "CodeQL for $SHA is '$codeql': not merging #$pr"
+            exit 0
+          fi
+
+          echo "CI and CodeQL passed for #$pr, $deps patch or minor updates: merging"
+          # --match-head-commit: GitHub refuses the merge if the head moved after
+          # the checks above, so what lands is the commit that was verified.
+          gh pr merge "$pr" --repo "$REPO" --squash --delete-branch --match-head-commit "$SHA" \
+            || gh pr merge "$pr" --repo "$REPO" --merge --delete-branch --match-head-commit "$SHA"
+
+          # The merge is pushed with GITHUB_TOKEN, and GitHub runs no workflows
+          # for pushes made with it, so main would land with no checks on its
+          # head and the status branch would not see it. workflow_dispatch is
+          # the documented exception: CI and CodeQL run again on main as merged.
+          gh workflow run ci.yml --repo "$REPO" --ref main
+          gh workflow run codeql.yml --repo "$REPO" --ref main
+          echo "CI and CodeQL dispatched on main as merged"
