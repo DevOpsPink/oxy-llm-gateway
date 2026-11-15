@@ -41,6 +41,7 @@ Exit status 0 only if every selected proof holds.
 
 import argparse
 import json
+import secrets
 import os
 import random
 import re
@@ -540,8 +541,66 @@ def proof_keys(results, tenants):
                        "tenant_keys_checked": len(keys), "tenants_whose_key_is_in_redis": found}
 
 
+def log_rows(query):
+    """request_logs rows matching a PostgREST filter, counted by the database."""
+    st, _, hdrs = http("GET", "%s/rest/v1/request_logs?%s&select=id" % (SUPA, query), None,
+                       {**SERVICE_HEADERS, "Prefer": "count=exact", "Range": "0-0"})
+    total = (hdrs.get("Content-Range") or hdrs.get("content-range") or "*/0").split("/")[-1]
+    return int(total) if total.isdigit() else 0
+
+
+def audit_revoke(tenants):
+    """Revoking a key in the dashboard keeps every audit row the key made.
+    Up to 1.0.2 the dashboard deleted the key and request_logs.api_key_id
+    cascaded: the key's rows, refusals included, went with it."""
+    t = Tenant("auditrevoke", Decimal("0"))
+    tenants.append(t)
+    auth = t.jwt_headers()
+    st, made, _ = http("POST", "%s/management/key?projectId=%s&name=proof-audit-revoke" % (API, t.project), None, auth)
+    assert st == 200 and str((made or {}).get("api_key", "")).startswith("oxy_"), "creating a key failed: %s" % st
+    key = made["api_key"]
+    st, listed, _ = http("GET", "%s/management/keys?projectId=%s" % (API, t.project), None, t.jwt_headers())
+    key_id = next(k["id"] for k in listed if k.get("key_name") == "proof-audit-revoke")
+    served = [t.chat("[proof:auditrevoke:%d] ping" % i, key=key)[0] for i in range(3)]
+    secret = "ghp_" + "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(36))
+    refused, _ = t.chat("[proof:auditrevoke:dlp] " + secret, key=key)
+    made_rows = len(served) + 1
+    before = 0
+    for _ in range(30):  # served rows are written in the background
+        before = log_rows("api_key_id=eq.%s" % key_id)
+        if before >= made_rows:
+            break
+        time.sleep(1)
+    rst, _, _ = http("DELETE", "%s/management/key/%s?projectId=%s" % (API, key_id, t.project), None, t.jwt_headers())
+    next_status, _ = t.chat("[proof:auditrevoke:after] ping", key=key, counted=False)  # 401: no project, no row
+    after = log_rows("api_key_id=eq.%s" % key_id)
+    rule = (psql("SELECT confdeltype FROM pg_constraint WHERE conname = 'request_logs_api_key_id_fkey'") or ["?"])[0]
+    ok = (all(s == 200 for s in served) and refused == 451 and rst == 200 and next_status == 401
+          and before == made_rows and after == before and rule != "c")
+    return {"ok": ok, "rows_before_revoke": before, "revoke_status": rst, "next_request_status": next_status,
+            "rows_after_revoke": after, "on_delete": {"n": "SET NULL", "c": "CASCADE", "r": "RESTRICT", "a": "NO ACTION"}.get(rule, rule)}
+
+
+def audit_rate_limited(tenants):
+    """A request refused by the burst limit (429) has its audit row too. The proofs
+    raise the limit, so the user's burst counter is set past it in Redis: the real
+    limiter refuses, with nothing else changed."""
+    t = Tenant("auditlimit", Decimal("0"))
+    tenants.append(t)
+    st, user, _ = http("GET", SUPA + "/auth/v1/user", None, {"apikey": ANON, "Authorization": "Bearer " + t.jwt})
+    assert st == 200 and user.get("id"), "reading the user failed: %s" % st
+    redis_cli("SET", "burst:" + user["id"], "1000000000", "EX", "30")
+    statuses = [t.chat("[proof:auditlimit:%d] ping" % i)[0] for i in range(5)]
+    redis_cli("DEL", "burst:" + user["id"])
+    return {"ok": all(s == 429 for s in statuses), "requests": len(statuses), "statuses": statuses}
+
+
 def proof_audit(results, tenants):
-    """Every request sent by the proofs above has a request_logs row."""
+    """Every request sent by the proofs above has a request_logs row, refusals
+    included: by the budget, DLP, the kill switch, another tenant's ids, the
+    burst limit. Revoking a key keeps its rows."""
+    revoke = audit_revoke(tenants)
+    limited = audit_rate_limited(tenants)
     expected = sum(t.sent for t in tenants)
     got = None
     for _ in range(30):
@@ -554,7 +613,8 @@ def proof_audit(results, tenants):
         if got >= expected:
             break
         time.sleep(1)
-    results["audit"] = {"ok": got == expected, "requests_sent": expected, "request_log_rows": got,
+    results["audit"] = {"ok": got == expected and revoke["ok"] and limited["ok"], "requests_sent": expected,
+                        "request_log_rows": got, "rate_limited": limited, "revoke_keeps_rows": revoke,
                         "per_proof": {t.label: t.sent for t in tenants}}
 
 

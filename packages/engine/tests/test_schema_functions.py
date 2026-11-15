@@ -55,3 +55,13 @@ def test_the_not_wired_list_holds_only_missing_functions():
     # A function that now exists, or is no longer called, leaves the list.
     stale = {name for name in NOT_WIRED if name in defined() or name not in called()}
     assert stale == set()
+
+
+def test_deleting_a_key_never_erases_its_audit_rows():
+    # request_logs.api_key_id cascaded on delete up to 1.0.2. Keys are revoked, not
+    # deleted, and a delete made by hand must leave the audit rows (SET NULL).
+    schema = (DB / "schema.sql").read_text(encoding="utf-8")
+    table = schema[schema.index("CREATE TABLE IF NOT EXISTS request_logs ("):]
+    table = table[:table.index(");")]
+    line = next(l for l in table.splitlines() if l.strip().startswith("api_key_id "))
+    assert "REFERENCES api_keys(id) ON DELETE SET NULL" in line, line

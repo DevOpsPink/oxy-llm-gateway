@@ -664,7 +664,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title="Oxy Engine API", 
-    version="1.0.2",
+    version="1.0.3",
     description="""
 # Oxy Engine - AI Control Plane
 
@@ -2297,7 +2297,8 @@ async def management_delete_key(
     user_id: str = Depends(get_current_user_id)
 ):
     """
-    Delete an API key.
+    Revoke an API key: it stops at once and stays listed as inactive. Revoked,
+    not deleted: request_logs keeps every row the key made.
     Requires organization membership.
     """
     try:
@@ -2333,12 +2334,16 @@ async def management_delete_key(
                 detail="You are not a member of this organization"
             )
         
+        # Revoked, not deleted: request_logs.api_key_id points at this row, and a
+        # DELETE cascaded to every audit row the key had made (1.0.2 and before).
         # Database first, then the cached record by the row's key_hash: a request
         # in between still finds the cache, one after it finds neither.
-        res = await core.resources.http_client.delete(
+        res = await core.resources.http_client.patch(
             f"{SUPABASE_URL}/rest/v1/api_keys",
             params={"id": f"eq.{key_id}", "project_id": f"eq.{project_id}"},
-            headers=get_supabase_headers(prefer="return=representation")
+            headers=get_supabase_headers(prefer="return=representation"),
+            json={"is_active": False, "deactivated_reason": "revoked",
+                  "deactivated_at": datetime.now(timezone.utc).isoformat()},
         )
         res.raise_for_status()
         rows = res.json() or []
@@ -2351,7 +2356,7 @@ async def management_delete_key(
             log.error("key_delete_cache_clear_failed", key_id=key_id, project_id=project_id, exc_info=True)
             raise HTTPException(
                 status_code=503,
-                detail="The key was deleted, but its cached record could not be cleared: it can work for up to 5 more minutes.",
+                detail="The key was revoked, but its cached record could not be cleared: it can work for up to 5 more minutes.",
             )
 
         log.info("api_key_revoked", user_id=user_id, key_id=key_id, project_id=project_id)
@@ -2665,7 +2670,7 @@ async def health(request: Request):
     """
     health_status = {
         "status": "active",
-        "version": "1.0.2",
+        "version": "1.0.3",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     

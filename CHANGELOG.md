@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.3 — 2026-11-15
+
+The audit trail keeps its promise: every request made with a valid key has a `request_logs` row, refusals included, and revoking a key no longer erases its rows. Found while writing the workshop lab.
+
+### Fixed (audit)
+
+- Revoking a key in the dashboard erased its audit trail. `DELETE /management/key/{id}` deleted the key, and `request_logs.api_key_id` referenced it with `ON DELETE CASCADE`, so every row the key had made, refusals included, went with it. The key is now revoked (`is_active` false, `deactivated_reason` "revoked"): it stops at once, stays listed as inactive, and keeps its rows. The foreign key is `ON DELETE SET NULL`, so a delete made by hand keeps the rows too. An existing database keeps the old rule until it runs: `ALTER TABLE request_logs DROP CONSTRAINT request_logs_api_key_id_fkey, ADD CONSTRAINT request_logs_api_key_id_fkey FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE SET NULL;`
+- Requests refused by the burst limit (429), by a suspended organization (403) or for a body that is not JSON (400) left no audit row; each now has one, without the prompt (it was never read). The gateway's built-in health ping is audited too.
+- The audit proof covers both: it revokes a key through the dashboard's route and requires the same number of rows for that key before and after, and checks that the foreign key does not cascade; it sends requests the real burst limiter refuses and counts their rows. Two new planted violations, the 1.0.2 revoke (a `DELETE` with the cascade) and a 429 without its row, must each make it fail: twelve in all.
+
+### Fixed (dashboard)
+
+- Threats Blocked counted every request: served requests are recorded as "safe", and anything but "none" counted as a threat. Only what DLP or the stream scanner finds counts now; refusals by the budget, the kill switch, the burst limit or a suspended organization are not threats.
+
 ## 1.0.2 — 2026-11-15
 
 A fix release: the dashboard's budget and project buttons work, deleting a project keeps its audit trail, and Dependabot keeps the dependencies current on its own.

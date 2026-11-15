@@ -665,7 +665,9 @@ COMMENT ON COLUMN agent_sessions.kill_requested_at IS 'Timestamp when kill switc
 CREATE TABLE IF NOT EXISTS request_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    api_key_id UUID REFERENCES api_keys(id) ON DELETE CASCADE,
+    -- SET NULL, not CASCADE: deleting a key must never erase its audit rows
+    -- (keys are revoked, not deleted; this holds for a delete made by hand too).
+    api_key_id UUID REFERENCES api_keys(id) ON DELETE SET NULL,
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     agent_id UUID REFERENCES agents(id) ON DELETE SET NULL,

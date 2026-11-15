@@ -52,6 +52,7 @@ async def record_request(
     prompt_text: Optional[str] = None,
     response_text: Optional[str] = None,
     latency_ms: Optional[int] = None,
+    threat_detected: Optional[bool] = None,
 ) -> None:
     """
     Record request cost/usage and adjust budget (best-effort).
@@ -76,8 +77,11 @@ async def record_request(
         "model": model,
         "provider": provider,
         "status": status,
-        # Mark threat_detected when any threat is present (blocked or detected/logged)
-        "threat_detected": threat not in ("none", None, ""),
+        # A threat is something DLP or the stream scanner found ("blocked",
+        # "detected", "stream_threat"). A served request is "safe"; a policy
+        # refusal (budget, kill switch, rate limit) passes threat_detected=False.
+        # Counting "safe" made the dashboard's Threats Blocked count every request.
+        "threat_detected": (threat not in (None, "", "none", "safe")) if threat_detected is None else threat_detected,
         "threat_type": threat_type,
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,

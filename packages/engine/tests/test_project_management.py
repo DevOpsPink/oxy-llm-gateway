@@ -61,6 +61,8 @@ class Database:
     async def patch(self, url, params=None, headers=None, json=None, **kwargs):
         table = self._table(url)
         self.calls.append(("PATCH", table, params or {}, json))
+        if table == "api_keys":
+            return Res([{"id": "key-1", "key_hash": "hash-1"}])
         return Res([{"id": "proj-1"}])
 
     async def delete(self, url, *args, **kwargs):
@@ -197,3 +199,24 @@ def test_data_export_says_it_is_not_wired(stack):
     client, db, order = stack()
     assert client.get("/management/export-data").status_code == 501
     assert db.calls == []
+
+
+def test_revoking_a_key_deactivates_it_and_keeps_its_audit_rows(stack, monkeypatch):
+    # Up to 1.0.2 this DELETEd the key, and request_logs.api_key_id cascaded:
+    # every audit row the key had made went with it.
+    import main
+    forgotten = []
+
+    async def forget(key_hash, project_id):
+        forgotten.append((key_hash, project_id, len(db.writes())))
+
+    monkeypatch.setattr(main, "forget_cached_api_key", forget)
+    client, db, order = stack()
+    r = client.delete("/management/key/key-1?projectId=proj-1", headers=CSRF)
+    assert r.status_code == 200, r.text
+    writes = db.writes()
+    assert [(w[0], w[1]) for w in writes] == [("PATCH", "api_keys")]
+    assert writes[0][2] == {"id": "eq.key-1", "project_id": "eq.proj-1"}
+    assert writes[0][3]["is_active"] is False and writes[0][3]["deactivated_reason"] == "revoked"
+    assert not any(c[0] == "DELETE" for c in db.calls)
+    assert forgotten == [("hash-1", "proj-1", 1)]  # the cached record goes after the database

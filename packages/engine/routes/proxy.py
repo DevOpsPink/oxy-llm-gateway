@@ -539,6 +539,17 @@ async def log_request(
     )
 
 
+async def _model_of(request: Request) -> str:
+    """The model a request asked for, for the audit row of a request refused before
+    its body is parsed; "unknown" when the body is not JSON or names none."""
+    try:
+        body = json.loads(await request.body())
+        model = body.get("model") if isinstance(body, dict) else None
+        return model if isinstance(model, str) and model else "unknown"
+    except Exception:
+        return "unknown"
+
+
 async def record_blocked_request(
     *,
     key_data: CacheData,
@@ -549,7 +560,10 @@ async def record_blocked_request(
     agent_id: Optional[str] = None,
     session_id: Optional[str] = None,
 ) -> None:
-    """Write a request_logs row for a request the gateway refused (budget, kill switch, suspension).
+    """Write a request_logs row for a request the gateway refused by policy: the
+    budget, the kill switch, the burst limit, a suspended organization, a body
+    that is not JSON. Such a refusal is not a threat (threat_detected false);
+    DLP findings are recorded where DLP runs.
 
     Awaited rather than queued: these paths end in a raised error or an early
     response, and the audit trail must not depend on background tasks running.
@@ -579,6 +593,7 @@ async def record_blocked_request(
             prompt_text=json.dumps(messages),
             response_text=None,
             latency_ms=int((time.monotonic() - request_start_ms) * 1000),
+            threat_detected=False,
         )
     except Exception as e:
         log.warning("blocked_request_log_failed", reason=reason, error=str(e)[:200])
@@ -1287,6 +1302,10 @@ async def chat_completions_proxy(
 
     org_status_payload = await get_org_status(organization_id)
     if org_status_payload.get("status") == "suspended":
+        await record_blocked_request(
+            key_data=key_data, model=await _model_of(request), messages=[], reason="org_suspended",
+            request_start_ms=request_start_ms,
+        )
         return JSONResponse(
             status_code=403,
             content={
@@ -1303,8 +1322,17 @@ async def chat_completions_proxy(
     # an organization's requests by a plan tier. Budgets (below) are the spend
     # control; monthly usage is still counted for the dashboard.
 
-    # Burst rate limiting
-    await check_burst_rate_limit(request, user_id)
+    # Burst rate limiting. A refused request still gets its audit row: the
+    # prompt is not stored (it was never read), the model is when the body has one.
+    try:
+        await check_burst_rate_limit(request, user_id)
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            await record_blocked_request(
+                key_data=key_data, model=await _model_of(request), messages=[], reason="rate_limited",
+                request_start_ms=request_start_ms,
+            )
+        raise
     
     # No subscription lookup on the request path; request logs carry no subscription.
     subscription_id = None
@@ -1325,11 +1353,26 @@ async def chat_completions_proxy(
         function_call = body_dict.get("function_call")  # Legacy format
         
     except Exception as e:
+        await record_blocked_request(
+            key_data=key_data, model="unknown", messages=[], reason="invalid_request",
+            request_start_ms=request_start_ms,
+        )
         raise HTTPException(status_code=400, detail="Invalid JSON body")
     
-    # Short-circuit healthcheck (no provider call)
+    # Short-circuit healthcheck (no provider call). Answered by the gateway itself,
+    # and audited like any other request.
     healthcheck_response = maybe_handle_gateway_healthcheck(model, messages, provider_kwargs)
     if healthcheck_response:
+        await record_request(
+            user_id=user_id, project_id=project_id, organization_id=organization_id,
+            api_key_id=key_data.get("key_id"), model=model, provider="oxy-healthcheck",
+            status="success", threat="none", threat_type="none", prompt_tokens=0,
+            completion_tokens=0, cost=Decimal("0"), subscription_id=None,
+            reserved_amount=Decimal("0"), cache_hit=False,
+            privacy_mode=key_data.get("privacy_mode") or DEFAULT_MODE,
+            prompt_text=json.dumps(messages), response_text=None,
+            latency_ms=int((time.monotonic() - request_start_ms) * 1000),
+        )
         return healthcheck_response
     
     provider_name = provider_registry.get_provider_name_for_model(model)

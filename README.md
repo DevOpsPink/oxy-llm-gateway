@@ -16,7 +16,7 @@ The last two badges are not typed by hand: they are CI's proofs over the last 30
 
 A complete control plane for LLM traffic, split across:
 
-- **`packages/engine`** — FastAPI gateway exposing an OpenAI-compatible `/v1/chat/completions` endpoint with provider routing (OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint through `OPENAI_API_BASE`), per-project budgets, response caching, DLP, kill switch, audit logs, and cost attribution. 442 offline unit tests.
+- **`packages/engine`** — FastAPI gateway exposing an OpenAI-compatible `/v1/chat/completions` endpoint with provider routing (OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint through `OPENAI_API_BASE`), per-project budgets, response caching, DLP, kill switch, audit logs, and cost attribution. 453 offline unit tests.
 - **`packages/ui`** — Next.js dashboard for keys, agents, budgets, privacy modes, audit logs, billing, intelligence, and playground.
 - **`db/`** — Postgres golden schema plus a Supabase-compatibility shim so the same code runs on either a hosted Supabase project or a local self-hosted stack.
 - **`docker-compose.yml`** — the local stack: Postgres, PostgREST, GoTrue (auth), Mailpit (local mail for magic links), nginx (URL-shape adapter), Redis, the engine with six background workers, and the UI.
@@ -147,7 +147,7 @@ What the gateway does today (heuristic where noted, best-effort, no SLA); what i
 - **Request export** — the organization's request log as CSV (`GET /v1/exports/requests.csv`)
 - **Privacy modes** — `zero_prompt_logging`, `metadata_only`, `debug_full`
 - **DLP** — regex detection before a request leaves the gateway: API keys and tokens (OpenAI, Anthropic, AWS, Stripe live, GitHub, Slack, Google), JWTs, private keys and card numbers. Email addresses alone are not blocked.
-- **Audit logs** — a `request_logs` row for every request, refusals included, and an admin audit log; a retention window per organization is stored (`/v1/privacy`)
+- **Audit logs** — a `request_logs` row for every request made with a valid key, refusals included (by the budget, DLP, the kill switch, the burst limit, a suspended organization, a body that is not JSON), kept when the key is revoked; and an admin audit log; a retention window per organization is stored (`/v1/privacy`)
 - **Rate limiting and security headers** — per-key throttling, HSTS/CSP/etc.
 - **Geo / IP protections** — header-first country/region blocking
 - **Notification settings** — Slack, Discord and Zapier webhook URLs and events per organization are stored (`/v1/notifications/settings`); see below for what is delivered
@@ -164,7 +164,7 @@ Three public repositories, three places to stop an AI request before it does dam
 |---|---|---|
 | [kubernetes-air-gapped-ai-agent](https://github.com/heyvaldemar/kubernetes-air-gapped-ai-agent) | inside a cluster with no route to the internet | the boundary at the tool server: the agent reaches tools only through MCP, models arrive as signed weights checked at admission |
 | [kubernetes-llm-inference-gateway](https://github.com/heyvaldemar/kubernetes-llm-inference-gateway) | in front of self-hosted model replicas | routing by queue and cache across vLLM replicas behind the Gateway API Inference Extension, cost per token measured |
-| Oxy (this repository) | in front of model providers, hosted or self-hosted | a budget per project, DLP, a kill switch for agent sessions, an audit row for every request |
+| Oxy (this repository) | in front of model providers, hosted or self-hosted | a budget per project, DLP, a kill switch for agent sessions, an audit row for every authenticated request |
 
 Oxy speaks the OpenAI API on both sides, so an inference gateway like the second one can sit behind it as one more OpenAI-compatible provider. The three have not been run together yet.
 
@@ -184,7 +184,7 @@ Oxy speaks the OpenAI API on both sides, so an inference gateway like the second
 | No API key is stored in Redis | 10 tenants' keys checked against every name and value of 45 Redis keys: 0 found |
 | Every request is audited | 843 requests sent by the proofs above, 843 `request_logs` rows, refusals included |
 
-`proofs/plant_violations.py` then plants, one at a time, the bug each proof exists for (a non-atomic reservation, the old spend ledger that reset every minute, DLP switched off, the kill state ignored, another tenant's ids accepted, a revoked key left in the cache, fail-open checks when Redis is down, the database functions and an open policy re-granted to the browser roles, the cache named by the raw key, audit writes dropped), requires that proof to fail, and restores the code. CI runs both on every push and daily (job **Proofs, each shown its planted violation**) and keeps the JSON; the branch `status` keeps the last 30 days.
+`proofs/plant_violations.py` then plants, one at a time, the bug each proof exists for (a non-atomic reservation, the old spend ledger that reset every minute, DLP switched off, the kill state ignored, another tenant's ids accepted, a revoked key left in the cache, fail-open checks when Redis is down, the database functions and an open policy re-granted to the browser roles, the cache named by the raw key, audit writes dropped, a dashboard revoke that deletes the key and cascades its audit rows, a burst-limited request left without its row), requires that proof to fail, and restores the code. CI runs both on every push and daily (job **Proofs, each shown its planted violation**) and keeps the JSON; the branch `status` keeps the last 30 days.
 
 ```bash
 docker compose -f docker-compose.yml -f proofs/docker-compose.proofs.yml up -d --build --wait
@@ -210,7 +210,7 @@ Every number in this table comes from one run: CI run [43771948656](https://gith
 - Frontend: Next.js 16 (App Router, Turbopack), TypeScript strict, supabase-js + `@supabase/ssr`, Radix UI primitives, Tailwind
 - Data: Postgres 16, PostgREST 12, GoTrue (Supabase Auth) v2
 - Infra: docker-compose, nginx (path adapter), Caddy for TLS
-- Tests: pytest (442 offline tests), Playwright + Vitest on the UI
+- Tests: pytest (453 offline tests), Playwright + Vitest on the UI
 
 ## Repository layout
 
@@ -235,7 +235,7 @@ oxy/
 ## Running the tests
 
 ```bash
-make test-core          # 442 offline unit tests, a few seconds
+make test-core          # 453 offline unit tests, a few seconds
 make test-integration   # requires a running engine + live external services
 ```
 

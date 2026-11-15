@@ -141,7 +141,10 @@ def proof_numbers(results, plants, run):
                     "policies_open_to_browser_roles": len(s.get("policies_open_to_browser_roles") or []) if s else None},
         "keys": {"holds": keys.get("ok"), "tenant_keys_checked": keys.get("tenant_keys_checked"),
                  "found_in_redis": len(keys.get("tenants_whose_key_is_in_redis") or []) if keys else None},
-        "audit": {"holds": a.get("ok"), "requests_sent": a.get("requests_sent"), "request_log_rows": a.get("request_log_rows")},
+        "audit": {"holds": a.get("ok"), "requests_sent": a.get("requests_sent"), "request_log_rows": a.get("request_log_rows"),
+                  "rate_limited_requests": (a.get("rate_limited") or {}).get("requests"),
+                  "revoke_rows_before": (a.get("revoke_keeps_rows") or {}).get("rows_before_revoke"),
+                  "revoke_rows_after": (a.get("revoke_keeps_rows") or {}).get("rows_after_revoke")},
         "plants": {"planted": len(plants), "caught": sum(1 for x in plants.values() if x.get("caught"))},
     }
 

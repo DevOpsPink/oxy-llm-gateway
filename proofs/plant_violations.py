@@ -20,6 +20,9 @@ script exits non-zero.
                 a policy lets anyone insert into sso_audit_log
   keys          the Redis cache is named by the raw API key
   audit         request_logs rows are never written
+  audit_revoke  the dashboard's revoke deletes the key and request_logs.api_key_id
+                cascades: the key's audit rows go with it (1.0.2 and before)
+  audit_429     a request refused by the burst limit gets no audit row
 
 Run against a stack started with proofs/docker-compose.proofs.yml. The compose
 command is taken from OXY_COMPOSE (default: the two files from the repo root).
@@ -138,6 +141,32 @@ PLANTS = {
         "edits": [("core/costs.py",
                    "    if supabase_available:\n",
                    "    if False:  # PLANTED VIOLATION\n")],
+    },
+    "audit_revoke": {
+        "proof": "audit", "run": "audit",
+        "sql": ("ALTER TABLE request_logs DROP CONSTRAINT request_logs_api_key_id_fkey, "
+                "ADD CONSTRAINT request_logs_api_key_id_fkey FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE CASCADE;",
+                "ALTER TABLE request_logs DROP CONSTRAINT request_logs_api_key_id_fkey, "
+                "ADD CONSTRAINT request_logs_api_key_id_fkey FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE SET NULL;"),
+        "edits": [("main.py",
+                   "        res = await core.resources.http_client.patch(\n"
+                   "            f\"{SUPABASE_URL}/rest/v1/api_keys\",\n"
+                   "            params={\"id\": f\"eq.{key_id}\", \"project_id\": f\"eq.{project_id}\"},\n"
+                   "            headers=get_supabase_headers(prefer=\"return=representation\"),\n"
+                   "            json={\"is_active\": False, \"deactivated_reason\": \"revoked\",\n"
+                   "                  \"deactivated_at\": datetime.now(timezone.utc).isoformat()},\n"
+                   "        )\n",
+                   "        res = await core.resources.http_client.delete(  # PLANTED VIOLATION: the key is deleted\n"
+                   "            f\"{SUPABASE_URL}/rest/v1/api_keys\",\n"
+                   "            params={\"id\": f\"eq.{key_id}\", \"project_id\": f\"eq.{project_id}\"},\n"
+                   "            headers=get_supabase_headers(prefer=\"return=representation\"),\n"
+                   "        )\n")],
+    },
+    "audit_429": {
+        "proof": "audit", "run": "audit",
+        "edits": [("routes/proxy.py",
+                   "        if exc.status_code == 429:\n            await record_blocked_request(\n",
+                   "        if False:  # PLANTED VIOLATION: no audit row for a 429\n            await record_blocked_request(\n")],
     },
 }
 

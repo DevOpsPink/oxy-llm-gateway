@@ -54,7 +54,11 @@ def rows(r, plants):
                      % (k.get("tenant_keys_checked"), k.get("redis_keys_scanned"), len(k.get("tenants_whose_key_is_in_redis") or [])), k["ok"]))
     if "audit" in r:
         a = r["audit"]
-        rows.append(("audit", "Audit", "%s requests sent, %s request_logs rows" % (a.get("requests_sent"), a.get("request_log_rows")), a["ok"]))
+        lim, rev = a.get("rate_limited") or {}, a.get("revoke_keeps_rows") or {}
+        rows.append(("audit", "Audit", "%s requests sent (%s refused by the burst limit), %s request_logs rows; "
+                     "a dashboard revoke kept %s of the key's %s rows"
+                     % (a.get("requests_sent"), lim.get("requests"), a.get("request_log_rows"),
+                        rev.get("rows_after_revoke"), rev.get("rows_before_revoke")), a["ok"]))
 
     out = []
     for key, name, text, ok in rows:
