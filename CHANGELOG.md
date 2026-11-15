@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0
+## 1.0.0 — 2026-11-15
 
 Oxy is a self-hosted LLM gateway: a FastAPI engine with an OpenAI-compatible `/v1/chat/completions` endpoint, a Next.js dashboard, and Postgres with PostgREST and GoTrue for data and sign-in. It puts budgets, DLP, a kill switch, audit logs and cost attribution in front of OpenAI, Anthropic, Gemini and local models. It is an Apache 2.0 reference implementation.
 

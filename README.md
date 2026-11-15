@@ -1,8 +1,16 @@
 # Oxy
 
+[![CI](https://github.com/heyvaldemar/oxy-llm-gateway/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/heyvaldemar/oxy-llm-gateway/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/heyvaldemar/oxy-llm-gateway/badge)](https://scorecard.dev/viewer/?uri=github.com/heyvaldemar/oxy-llm-gateway)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![proofs, last 30 days](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fheyvaldemar%2Foxy-llm-gateway%2Fstatus%2Fbadge-days.json)](https://github.com/heyvaldemar/oxy-llm-gateway/blob/status/status.json)
+[![proofs](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fheyvaldemar%2Foxy-llm-gateway%2Fstatus%2Fbadge-checks.json)](https://github.com/heyvaldemar/oxy-llm-gateway/blob/status/status.json)
+
 A self-hosted LLM gateway with budgets, guardrails, DLP, kill switch, and cost analytics. Runs end-to-end on a single `docker compose up` — no cloud accounts required.
 
 > Apache 2.0, built by two co-authors as a reference implementation of an LLM gateway. The main claims below are measured in CI against a recording fake provider, and each measurement is shown the bug it exists to catch: see [Proofs](#proofs).
+
+The last two badges are not typed by hand: they are CI's proofs over the last 30 days on main, rewritten after every run by [`.github/workflows/status.yml`](.github/workflows/status.yml) into the [`status`](https://github.com/heyvaldemar/oxy-llm-gateway/tree/status) branch.
 
 ## What's here
 
@@ -20,6 +28,10 @@ git clone https://github.com/heyvaldemar/oxy-llm-gateway.git
 cd oxy-llm-gateway
 docker compose up -d --build --wait
 ```
+
+![From a clean clone to "pong": docker compose up, a magic link through Mailpit, an Oxy API key, a request through the gateway](docs/walkthrough.gif)
+
+Recorded on a clean GitHub runner by [`.github/workflows/walkthrough.yml`](https://github.com/heyvaldemar/oxy-llm-gateway/actions/runs/43744856761) from [`scripts/walkthrough.sh`](scripts/walkthrough.sh), which prints every command and runs it as printed; build output is hidden and replayed at double speed. The cast is in [`docs/walkthrough.cast`](docs/walkthrough.cast) (`asciinema play docs/walkthrough.cast`).
 
 The first build takes a few minutes. No `.env` file, cloud account or provider key is needed to start. Then:
 
@@ -132,13 +144,13 @@ Oxy speaks the OpenAI API on both sides, so an inference gateway like the second
 |---|---|
 | A budget is never overspent | 501 requests, 100 at a time, against a $0.05 budget: the provider served 35 completions, exactly what the budget buys; overspend $0. After the budget worker's sync cycles, 0 of 20 more were served, and 0 of 20 after Redis lost the spend counter |
 | DLP stops secrets before the provider | 11 secret types sent; 0 reached the provider; a clean control request did |
-| The kill switch stops a session | 246 requests started after `POST /v1/agent-sessions/{id}/kill` returned; 0 reached the provider; first blocked response 130 ms after the call. Another tenant's kill attempt answered 404 |
+| The kill switch stops a session | 124 requests started after `POST /v1/agent-sessions/{id}/kill` returned; 0 reached the provider; first blocked response 173 ms after the call. Another tenant's kill attempt answered 404 |
 | One tenant cannot act as another's agent | 25 requests carrying another tenant's agent and session ids: 25 refused with 403, 0 reached the provider, 0 logged against that tenant's agent |
 | A revoked key stops at once | a key used a moment before (so cached) is revoked: 10 of 10 next requests refused with 401, 0 reached the provider |
 | Without Redis, nothing unchecked gets through | Redis paused for 8 s: 4 requests against a budget answered 503, 4 in a killed session 410 (decided by Postgres); 0 of the 8 reached the provider. 2 requests needing neither check were served |
 | The browser cannot reach the engine's data | 27 database functions called through PostgREST with the public anon key and with a user's token: 0 callable; 41 tables, all with row-level security; 0 policies open to the browser roles |
-| No API key is stored in Redis | 10 tenants' keys checked against every name and value of 87 Redis keys: 0 found |
-| Every request is audited | 942 requests sent by the proofs above, 942 `request_logs` rows, refusals included |
+| No API key is stored in Redis | 10 tenants' keys checked against every name and value of 44 Redis keys: 0 found |
+| Every request is audited | 773 requests sent by the proofs above, 773 `request_logs` rows, refusals included |
 
 `proofs/plant_violations.py` then plants, one at a time, the bug each proof exists for (a non-atomic reservation, the old spend ledger that reset every minute, DLP switched off, the kill state ignored, another tenant's ids accepted, a revoked key left in the cache, fail-open checks when Redis is down, the database functions and an open policy re-granted to the browser roles, the cache named by the raw key, audit writes dropped), requires that proof to fail, and restores the code. CI runs both on every push and daily (job **Proofs, each shown its planted violation**) and keeps the JSON; the branch `status` keeps the last 30 days.
 
@@ -148,7 +160,7 @@ python3 proofs/run_proofs.py
 python3 proofs/plant_violations.py
 ```
 
-The numbers above come from a local run on 2026-11-15; the stack is the default one, a single engine process.
+The numbers above come from CI run [43743799006](https://github.com/heyvaldemar/oxy-llm-gateway/actions/runs/43743799006) (job [Proofs, each shown its planted violation](https://github.com/heyvaldemar/oxy-llm-gateway/actions/runs/43743799006/job/132902541584)) on 2026-11-15, the first run on the public repository: all nine proofs held and all ten planted violations were caught. The stack is the default one, a single engine process on a GitHub-hosted runner. The latest run's numbers are in [`status.json`](https://github.com/heyvaldemar/oxy-llm-gateway/blob/status/status.json).
 
 ## Scope and honest limitations
 
