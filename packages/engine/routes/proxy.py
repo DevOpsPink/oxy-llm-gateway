@@ -512,14 +512,22 @@ async def log_request(
     prompt_text: str | None = None,
     response_text: str | None = None,
     latency_ms: int | None = None,
+    api_key_id: str | None = None,
+    agent_id: str | None = None,
+    session_id: str | None = None,
 ):
     """
-    Backward-compatible wrapper around core.costs.record_request.
+    Backward-compatible wrapper around core.costs.record_request. The key, agent
+    and session go on the row: without them a served request was not attributed
+    to the key that made it.
     """
     await record_request(
         user_id=user_id,
         project_id=project_id,
         organization_id=organization_id,
+        api_key_id=api_key_id,
+        agent_id=agent_id,
+        session_id=session_id,
         model=model,
         provider=provider,
         status=status,
@@ -1686,6 +1694,7 @@ async def chat_completions_proxy(
             "mock", "safe", "none",
             mock_prompt_tokens, mock_completion_tokens, mock_cost,
             subscription_id, reservation_amount,
+            api_key_id=key_data.get("key_id"), agent_id=agent_id, session_id=session_id,
             latency_ms=int((time.monotonic() - request_start_ms) * 1000),
         )
         
@@ -2066,6 +2075,7 @@ async def chat_completions_proxy(
                 user_id, project_id, organization_id, model, provider_name,
                 log_status, log_threat, log_threat_type, 
                 prompt_tokens, completion_tokens, cost, subscription_id, reservation_amount,
+                api_key_id=key_data.get("key_id"), agent_id=agent_id, session_id=session_id,
                 privacy_mode=privacy_mode,
                 prompt_text=prompt_snapshot,
                 response_text=response_text,
@@ -2102,6 +2112,7 @@ async def chat_completions_proxy(
             log_request,
             user_id, project_id, organization_id, model, provider_name,
             "error", "safe", "none", 0, 0, Decimal("0"), subscription_id, reservation_amount,
+            api_key_id=key_data.get("key_id"), agent_id=agent_id, session_id=session_id,
             privacy_mode=privacy_mode,
             prompt_text=prompt_snapshot,
             response_text=None,
@@ -2130,6 +2141,7 @@ async def chat_completions_proxy(
             log_request,
             user_id, project_id, organization_id, model, provider_name,
             "error", "safe", "none", 0, 0, Decimal("0"), subscription_id, reservation_amount,
+            api_key_id=key_data.get("key_id"), agent_id=agent_id, session_id=session_id,
             privacy_mode=privacy_mode,
             prompt_text=prompt_snapshot,
             response_text=None,
@@ -2159,6 +2171,7 @@ async def chat_completions_proxy(
             log_request,
             user_id, project_id, organization_id, model, provider_name,
             "error", "safe", "none", 0, 0, Decimal("0"), subscription_id, reservation_amount,
+            api_key_id=key_data.get("key_id"), agent_id=agent_id, session_id=session_id,
             privacy_mode=privacy_mode,
             prompt_text=prompt_snapshot,
             response_text=None,
@@ -2185,6 +2198,7 @@ async def chat_completions_proxy(
             log_request,
             user_id, project_id, organization_id, model, provider_name,
             "error", "safe", "none", 0, 0, Decimal("0"), subscription_id, reservation_amount,
+            api_key_id=key_data.get("key_id"), agent_id=agent_id, session_id=session_id,
             latency_ms=int((time.monotonic() - request_start_ms) * 1000),
         )
         raise HTTPException(
@@ -2205,6 +2219,7 @@ async def chat_completions_proxy(
             log_request,
             user_id, project_id, organization_id, model, provider_name,
             "error", "safe", "none", 0, 0, Decimal("0"), subscription_id, reservation_amount,
+            api_key_id=key_data.get("key_id"), agent_id=agent_id, session_id=session_id,
             latency_ms=int((time.monotonic() - request_start_ms) * 1000),
         )
         raise HTTPException(

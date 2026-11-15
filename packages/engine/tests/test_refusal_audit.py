@@ -145,3 +145,33 @@ async def test_a_policy_refusal_is_not_a_threat(logged, monkeypatch):
     await p.record_blocked_request(key_data=dict(KEY), model="gpt-4o-mini", messages=[], reason="budget_exceeded",
                                    request_start_ms=0.0)
     assert [(row["threat_type"], row["threat_detected"]) for row in logged] == [("budget_exceeded", False)]
+
+
+# --------------------------------------------------------------------------- attribution
+
+@pytest.mark.asyncio
+async def test_a_served_request_row_names_its_key(monkeypatch):
+    # Served rows went through log_request, which took no key: they could not be
+    # counted for the key that made them, and a revoke check by key saw 1 of 4.
+    from routes import proxy as p
+    seen = []
+
+    async def record(**kwargs):
+        seen.append(kwargs)
+
+    monkeypatch.setattr(p, "record_request", record)
+    await p.log_request("user-1", "proj-1", "org-1", "gpt-4o-mini", "openai", "success", "safe", "none",
+                        1, 1, Decimal("0"), None, Decimal("0"), api_key_id="key-1", agent_id="agent-1",
+                        session_id="sess-1")
+    assert [(r["api_key_id"], r["agent_id"], r["session_id"]) for r in seen] == [("key-1", "agent-1", "sess-1")]
+
+
+def test_every_log_request_call_passes_the_key():
+    import re
+    from pathlib import Path
+    source = (Path(__file__).resolve().parent.parent / "routes" / "proxy.py").read_text(encoding="utf-8")
+    calls = [m.start() for m in re.finditer(r"\n\s+log_request,\n", source)]
+    assert calls, "no log_request calls found"
+    for start in calls:
+        call = source[start:source.index("\n        )", start)]
+        assert 'api_key_id=key_data.get("key_id")' in call, call[:300]
