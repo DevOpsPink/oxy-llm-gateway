@@ -14,6 +14,7 @@ SECURITY: All endpoints require JWT authentication (get_current_user_id dependen
 """
 
 import json
+from datetime import datetime, timezone
 from fastapi import APIRouter, Request, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator, model_validator
 from slowapi import Limiter
@@ -21,7 +22,7 @@ from slowapi.util import get_remote_address
 
 # Import shared resources and dependencies
 from core import resources, log, SUPABASE_URL, RATE_LIMIT_MANAGEMENT_PER_MINUTE
-from dependencies import get_current_user_id, get_supabase_headers
+from dependencies import get_current_user_id, get_supabase_headers, require_org_admin
 from security_utils import log_error_safe
 
 # ============================================================================
@@ -588,34 +589,13 @@ async def export_user_data(
     user_id: str = Depends(get_current_user_id)
 ):
     """
-    GDPR Article 20: Right to Data Portability
-    Export all user data as JSON (machine-readable format).
-    
-    Returns:
-        JSON file containing all user data (profile, projects, usage, etc.)
+    Export a user's data as JSON. Not wired in this release: the database has no
+    fn_export_user_data, so this answers 501 instead of a 500 on every call.
     """
-    try:
-        res = await resources.http_client.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/fn_export_user_data",
-            headers=get_supabase_headers(),
-            json={"user_id_param": user_id},
-            timeout=30.0
-        )
-        res.raise_for_status()
-        data = res.json()
-        
-        log.info("user_data_exported", user_id=user_id)
-        
-        return JSONResponse(
-            content=data,
-            headers={
-                "Content-Disposition": f"attachment; filename=oxy-data-{user_id}.json",
-                "Content-Type": "application/json"
-            }
-        )
-    except Exception as e:
-        log.error("data_export_failed", user_id=user_id, error=str(e), exc_info=True)
-        raise HTTPException(status_code=500, detail="Data export failed")
+    raise HTTPException(
+        status_code=501,
+        detail="Data export is not wired in this release: the database function it needs does not exist.",
+    )
 
 
 @router.delete("/onboard")
@@ -697,6 +677,28 @@ async def update_profile(
     return {"status": "updated", "full_name": req.full_name}
 
 
+async def _provider_org_id(user_id: str) -> str:
+    """The organization whose provider keys the caller manages: the one they own,
+    else their first active membership."""
+    org_res = await resources.http_client.get(
+        f"{SUPABASE_URL}/rest/v1/organizations",
+        params={"select": "id", "owner_user_id": f"eq.{user_id}", "limit": "1"},
+        headers=get_supabase_headers(),
+        timeout=5.0,
+    )
+    if org_res.status_code == 200 and org_res.json():
+        return org_res.json()[0].get("id")
+    member_res = await resources.http_client.get(
+        f"{SUPABASE_URL}/rest/v1/organization_members",
+        params={"select": "organization_id", "user_id": f"eq.{user_id}", "status": "eq.active", "limit": "1"},
+        headers=get_supabase_headers(),
+        timeout=5.0,
+    )
+    if member_res.status_code == 200 and member_res.json():
+        return member_res.json()[0].get("organization_id")
+    raise HTTPException(status_code=400, detail="Organization not found for user")
+
+
 @router.post("/provider")
 @limiter.limit(f"{RATE_LIMIT_MANAGEMENT_PER_MINUTE}/minute")
 async def update_provider(
@@ -731,39 +733,10 @@ async def update_provider(
         raise HTTPException(status_code=400, detail="Unsupported provider_name")
     
     try:
-        # Resolve organization_id (owner org)
-        org_id = None
-        org_res = await resources.http_client.get(
-            f"{SUPABASE_URL}/rest/v1/organizations",
-            params={
-                "select": "id",
-                "owner_user_id": f"eq.{user_id}",
-                "limit": "1"
-            },
-            headers=get_supabase_headers(),
-            timeout=5.0
-        )
-        if org_res.status_code == 200 and org_res.json():
-            org_id = org_res.json()[0].get("id")
-        
-        # Fallback: membership lookup
-        if not org_id:
-            member_res = await resources.http_client.get(
-                f"{SUPABASE_URL}/rest/v1/organization_members",
-                params={
-                    "select": "organization_id",
-                    "user_id": f"eq.{user_id}",
-                    "status": "eq.active",
-                    "limit": "1"
-                },
-                headers=get_supabase_headers(),
-                timeout=5.0
-            )
-            if member_res.status_code == 200 and member_res.json():
-                org_id = member_res.json()[0].get("organization_id")
-        
-        if not org_id:
-            raise HTTPException(status_code=400, detail="Organization not found for user")
+        org_id = await _provider_org_id(user_id)
+        # The organization's provider keys decide whose account pays: an owner or
+        # admin changes them, as with every other organization setting.
+        await require_org_admin({"user_id": user_id, "organization_id": org_id})
         
         # Update via RPC
         res = await resources.http_client.post(
@@ -795,16 +768,23 @@ async def disconnect_provider(
     request: Request, 
     user_id: str = Depends(get_current_user_id)
 ):
-    """Disconnect provider (delete API key)."""
+    """Disconnect the organization's provider keys: the gateway stops using them
+    (they are marked inactive; it reads only active ones). An owner or admin only."""
     try:
-        res = await resources.http_client.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/fn_disconnect_provider",
-            headers=get_supabase_headers(),
-            json={"p_user_id": user_id},
+        org_id = await _provider_org_id(user_id)
+        await require_org_admin({"user_id": user_id, "organization_id": org_id})
+        # The schema has no fn_disconnect_provider: the rows themselves.
+        res = await resources.http_client.patch(
+            f"{SUPABASE_URL}/rest/v1/providers",
+            params={"organization_id": f"eq.{org_id}", "is_active": "eq.true"},
+            headers=get_supabase_headers(prefer="return=minimal"),
+            json={"is_active": False, "updated_at": datetime.now(timezone.utc).isoformat()},
             timeout=30.0
         )
         res.raise_for_status()
         await clear_user_cache(user_id)
+    except HTTPException:
+        raise
     except Exception as e:
         log.error("provider_disconnect_failed", user_id=user_id, error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="Provider disconnect failed")

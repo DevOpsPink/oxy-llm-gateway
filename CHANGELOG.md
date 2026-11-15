@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed (dashboard)
+
+- The dashboard can set a project's budget, rename, create and delete a project again. All four answered 500 in v1.0.1, because `PUT`, `POST` and `DELETE /management/project` called `fn_update_project`, `fn_create_project` and `fn_delete_project`, which the schema never had (creating a project also read a field its request does not carry). They now write the `projects` table directly, after the same owner-or-admin check, and setting a budget drops the project's cached keys so the next request reads the new cap.
+- Deleting a project deactivates it instead of erasing it. Its keys stop at once and it leaves every listing and the plan's project count. Its request logs stay: `request_logs` references the project with `ON DELETE CASCADE`, so a real `DELETE` would have taken the audit trail with it.
+- Disconnecting the provider keys in Settings works (`fn_disconnect_provider` did not exist either): the organization's keys are marked inactive, and the gateway reads only active ones. Adding or disconnecting a provider key now needs an owner or admin, as other organization settings do since 1.0.1.
+- `GET /management/export-data` answers 501 instead of 500: its database function does not exist, and the README lists it as not wired.
+- `tests/test_schema_functions.py` reads every database function the engine calls and fails when `db/` does not create it, outside an explicit list of not-wired features. The smoke test now sets a budget, deletes a project (and requires its key to stop) and creates one, all with the dashboard's session.
+- `docs/security/dlp-checks.md` claimed emails were checked and suggested `sk-test-123` as a test secret; the code checks neither. It now lists the patterns `DLP_PATTERNS` holds, and the 451 hint no longer mentions SSNs or PII.
+
 ### Dependencies
 
 - The UI's unit tests run on Vitest 4 (4.1.12, with `@vitest/coverage-v8` and `@vitest/ui` at the same version and Vite 7.3). Coverage names source files only (`src/lib/**/*.{ts,tsx}`, `src/hooks/**/*.{ts,tsx}`): Vitest 4 reports every file `coverage.include` matches, and `src/lib` holds a Markdown guide. Dependabot checks the pnpm workspace from its root alone; listing `packages/ui` as well opened a second pull request for each update, without the lockfile.

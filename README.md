@@ -16,7 +16,7 @@ The last two badges are not typed by hand: they are CI's proofs over the last 30
 
 A complete control plane for LLM traffic, split across:
 
-- **`packages/engine`** — FastAPI gateway exposing an OpenAI-compatible `/v1/chat/completions` endpoint with provider routing (OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint through `OPENAI_API_BASE`), per-project budgets, response caching, DLP, kill switch, audit logs, and cost attribution. 427 offline unit tests.
+- **`packages/engine`** — FastAPI gateway exposing an OpenAI-compatible `/v1/chat/completions` endpoint with provider routing (OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint through `OPENAI_API_BASE`), per-project budgets, response caching, DLP, kill switch, audit logs, and cost attribution. 441 offline unit tests.
 - **`packages/ui`** — Next.js dashboard for keys, agents, budgets, privacy modes, audit logs, billing, intelligence, and playground.
 - **`db/`** — Postgres golden schema plus a Supabase-compatibility shim so the same code runs on either a hosted Supabase project or a local self-hosted stack.
 - **`docker-compose.yml`** — the local stack: Postgres, PostgREST, GoTrue (auth), Mailpit (local mail for magic links), nginx (URL-shape adapter), Redis, the engine with six background workers, and the UI.
@@ -201,7 +201,7 @@ Every number in this table comes from one run: CI run [43758846165](https://gith
 - **The vault shim uses pgcrypto AES with a configurable key.** It is intentionally weaker than Supabase's pgsodium-backed Vault. Review `db/supabase-compat.sql` before storing real provider keys in it.
 - **Email auto-confirm is on by default** so signups work without SMTP. Disable `GOTRUE_MAILER_AUTOCONFIRM` and configure SMTP for any deployment that handles real users.
 - **A budget is the project's total spend**, not a monthly allowance: nothing resets it. The Redis counter is the ledger; the budget worker copies it to `projects.current_spend` every 60 s, and if Redis loses the counter it resumes from that copy, so at most the last minute's spend can be spent again.
-- **Not wired in this release.** These have code or schema in the repository but do not work end to end, and the dashboard does not offer them: accepting team invitations (`/management/team/invite/accept` answers 501; an operator adds members in `organization_members`); SSO sign-in (`/auth/sso/callback` answers 501, three database functions are missing); delivery to registered webhooks and the Slack, Discord and Zapier alerts; cost-spike auto-suspend (the worker reads a column that does not exist); scheduled deletion by the retention window; approving an MCP tool call; redeeming referral credits; cost attribution tags (nothing writes them); key-rotation headers; the dedicated Ollama and vLLM adapters; enforcing agent budgets, team-member caps and per-tool MCP limits.
+- **Not wired in this release.** These have code or schema in the repository but do not work end to end, and the dashboard does not offer them: accepting team invitations (`/management/team/invite/accept` answers 501; an operator adds members in `organization_members`); SSO sign-in (`/auth/sso/callback` answers 501, three database functions are missing); exporting a user's data (`/management/export-data` answers 501, its database function is missing); delivery to registered webhooks and the Slack, Discord and Zapier alerts; cost-spike auto-suspend (the worker reads a column that does not exist); scheduled deletion by the retention window; approving an MCP tool call; redeeming referral credits; cost attribution tags (nothing writes them); key-rotation headers; the dedicated Ollama and vLLM adapters; enforcing agent budgets, team-member caps and per-tool MCP limits.
 - **Without Redis the gateway refuses what it cannot check.** A request against a budget answers 503; a request in an agent session is decided by the session's row in Postgres, or refused. Other requests are still served, a little slower (the API key is looked up in Postgres).
 
 ## Tech stack
@@ -210,7 +210,7 @@ Every number in this table comes from one run: CI run [43758846165](https://gith
 - Frontend: Next.js 16 (App Router, Turbopack), TypeScript strict, supabase-js + `@supabase/ssr`, Radix UI primitives, Tailwind
 - Data: Postgres 16, PostgREST 12, GoTrue (Supabase Auth) v2
 - Infra: docker-compose, nginx (path adapter), Caddy for TLS
-- Tests: pytest (427 offline tests), Playwright + Vitest on the UI
+- Tests: pytest (441 offline tests), Playwright + Vitest on the UI
 
 ## Repository layout
 
@@ -235,7 +235,7 @@ oxy/
 ## Running the tests
 
 ```bash
-make test-core          # 427 offline unit tests, a few seconds
+make test-core          # 441 offline unit tests, a few seconds
 make test-integration   # requires a running engine + live external services
 ```
 

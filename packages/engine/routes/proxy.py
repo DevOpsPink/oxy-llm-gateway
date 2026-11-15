@@ -1477,7 +1477,7 @@ async def chat_completions_proxy(
                     "error": {
                         "code": "DLP_BLOCKED",
                         "message": f"Request blocked: Sensitive data detected ({threat_type}).",
-                        "hint": f"Remove {threat_type} from your message content. Do NOT include API keys, passwords, SSNs, credit cards, or PII in prompts.",
+                        "hint": f"Remove the {threat_type} from your message. The gateway checks for API keys, tokens, private keys and card numbers.",
                     }
                 },
             )

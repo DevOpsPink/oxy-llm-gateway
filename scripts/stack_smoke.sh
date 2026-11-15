@@ -109,4 +109,31 @@ REPLY="$(printf 'header = "Authorization: Bearer %s"\n' "$OXY_API_KEY" | curl_h 
 [ "$REPLY" = "pong from Oxy Gateway" ] || fail "gateway answered '$REPLY'"
 echo "gateway answered: $REPLY"
 
+step "the dashboard's project buttons write the database"
+# Set Budget Limit, Delete and Create New Project, called the way the dashboard
+# calls them. In v1.0.1 all three answered 500: they called database functions
+# the schema never had, and nothing here wrote through them.
+session() { printf 'header = "Authorization: Bearer %s"\n' "$ACCESS_TOKEN"; }
+PROJECT_ID="$(session | curl_h "$API_URL/management/projects" | json "d[0]['id']")"
+code="$(session | curl_h -o /dev/null -w '%{http_code}' -X PUT "$API_URL/management/project/$PROJECT_ID" \
+  -H "X-CSRF-Token: $CSRF" -b "csrf_token=$CSRF" -H 'Content-Type: application/json' \
+  --data '{"name":"Smoke budget","budget_limit":"12.50"}')"
+[ "$code" = 200 ] || fail "Set Budget Limit (PUT /management/project/{id}) answered HTTP $code"
+BUDGET="$(session | curl_h "$API_URL/management/projects" \
+  | json "[float(p['budget_limit']) for p in d if p['id'] == '$PROJECT_ID'][0]")"
+[ "$BUDGET" = "12.5" ] || fail "the project's budget reads '$BUDGET' after Set Budget Limit 12.50"
+echo "Set Budget Limit saved \$12.50"
+code="$(session | curl_h -o /dev/null -w '%{http_code}' -X DELETE "$API_URL/management/project/$PROJECT_ID" \
+  -H "X-CSRF-Token: $CSRF" -b "csrf_token=$CSRF")"
+[ "$code" = 200 ] || fail "Delete project answered HTTP $code"
+code="$(printf 'header = "Authorization: Bearer %s"\n' "$OXY_API_KEY" | curl_h -o /dev/null -w '%{http_code}' \
+  -X POST "$API_URL/v1/chat/completions" -H 'Content-Type: application/json' \
+  --data '{"model":"gpt-4.1-mini","stream":false,"messages":[{"role":"user","content":"ping"}]}')"
+[ "$code" = 401 ] || fail "the deleted project's key, used a moment before, answered HTTP $code instead of 401"
+echo "deleting the project stopped its key at once"
+NEW_ID="$(session | curl_h -X POST "$API_URL/management/project" -H "X-CSRF-Token: $CSRF" -b "csrf_token=$CSRF" \
+  -H 'Content-Type: application/json' --data '{"name":"Smoke second"}' | json "d.get('id') or ''")"
+[ -n "$NEW_ID" ] || fail "Create New Project returned no project"
+echo "Create New Project made a project (the deleted one no longer counts toward the plan's cap)"
+
 printf '\nAll smoke checks passed.\n'

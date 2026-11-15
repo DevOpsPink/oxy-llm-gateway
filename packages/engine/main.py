@@ -1694,6 +1694,7 @@ async def management_list_projects(request: Request, user_id: str = Depends(get_
             params={
                 "select": "id,name,budget_limit,current_spend,organization_id,created_at,organizations(name)",
                 "organization_id": f"in.({','.join(org_ids)})",
+                "status": "neq.deleted",
                 "order": "created_at.desc"
             },
             headers=get_supabase_headers()
@@ -1847,7 +1848,8 @@ async def management_create_project(request: Request, req: ProjectCreateRequest,
             f"{SUPABASE_URL}/rest/v1/projects",
             params={
                 "select": "id",
-                "organization_id": f"eq.{organization_id}"
+                "organization_id": f"eq.{organization_id}",
+                "status": "neq.deleted",
             },
             headers=get_supabase_headers(prefer="count=exact")
         )
@@ -1883,19 +1885,18 @@ async def management_create_project(request: Request, req: ProjectCreateRequest,
                 detail=f"Project limit reached. Your {current_tier_name} plan allows {max_projects} project(s). You currently have {existing_count}. An operator can raise the plan tier to allow more projects."
             )
         
-        # Create project via RPC function
+        # A row in projects (the schema has no fn_create_project). The budget starts
+        # at 0, no cap; the owner sets it with PUT /management/project/{id}.
         res = await core.resources.http_client.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/fn_create_project",
-            headers=get_supabase_headers(),
-            json={
-                "p_user_id": user_id,
-                "p_name": req.name,
-                "p_budget_limit": str(req.budget_limit)
-            }
+            f"{SUPABASE_URL}/rest/v1/projects",
+            headers=get_supabase_headers(prefer="return=representation"),
+            json={"organization_id": organization_id, "user_id": user_id, "name": req.name},
         )
         res.raise_for_status()
-        log.info("project_created", user_id=user_id, organization_id=organization_id, project_name=req.name, tier=tier)
-        return res.json()
+        created = (res.json() or [{}])[0]
+        log.info("project_created", user_id=user_id, organization_id=organization_id, project_id=created.get("id"), tier=tier)
+        return {"id": created.get("id"), "name": created.get("name"), "organization_id": organization_id,
+                "budget_limit": created.get("budget_limit")}
     except HTTPException:
         raise
     except Exception as e:
@@ -1916,6 +1917,7 @@ async def management_update_project(request: Request, project_id: str, req: Proj
             params={
                 "select": "organization_id",
                 "id": f"eq.{project_id}",
+                "status": "neq.deleted",
                 "limit": "1"
             },
             headers=get_supabase_headers()
@@ -1941,18 +1943,18 @@ async def management_update_project(request: Request, project_id: str, req: Proj
                 detail="Only admins and owners can update projects"
             )
         
-        # Update project via RPC function
-        res = await core.resources.http_client.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/fn_update_project",
-            headers=get_supabase_headers(prefer="return=minimal"),
-            json={
-                "p_project_id": project_id,
-                "p_user_id": user_id,
-                "p_name": req.name,
-                "p_budget_limit": str(req.budget_limit)
-            }
+        # The row itself (the schema has no fn_update_project). Then the cached
+        # keys of the project are dropped, so the next request reads the new cap.
+        res = await core.resources.http_client.patch(
+            f"{SUPABASE_URL}/rest/v1/projects",
+            params={"id": f"eq.{project_id}", "organization_id": f"eq.{organization_id}", "status": "neq.deleted"},
+            headers=get_supabase_headers(prefer="return=representation"),
+            json={"name": req.name, "budget_limit": str(req.budget_limit),
+                  "updated_at": datetime.now(timezone.utc).isoformat()},
         )
         res.raise_for_status()
+        if not res.json():
+            raise HTTPException(status_code=404, detail="Project not found")
         
         await clear_project_cache(project_id)
         
@@ -2001,7 +2003,8 @@ async def list_user_organizations(request: Request, user_id: str = Depends(get_c
 @limiter.limit(f"{RATE_LIMIT_MANAGEMENT_PER_MINUTE}/minute")
 async def management_delete_project(request: Request, project_id: str, user_id: str = Depends(get_current_user_id)):
     """
-    Delete a project and all its API keys.
+    Delete a project: its keys stop at once and it leaves every listing. The row
+    and its request logs stay (deactivated, not erased).
     Requires admin or owner role in the project's organization.
     """
     try:
@@ -2011,6 +2014,7 @@ async def management_delete_project(request: Request, project_id: str, user_id: 
             params={
                 "select": "organization_id",
                 "id": f"eq.{project_id}",
+                "status": "neq.deleted",
                 "limit": "1"
             },
             headers=get_supabase_headers()
@@ -2036,18 +2040,27 @@ async def management_delete_project(request: Request, project_id: str, user_id: 
                 detail="Only admins and owners can delete projects"
             )
         
-        await clear_project_cache(project_id)
-        
-        # Delete project via RPC function
-        res = await core.resources.http_client.post(
-            f"{SUPABASE_URL}/rest/v1/rpc/fn_delete_project",
+        # Deactivated, not erased: request_logs, agents and agent sessions reference
+        # the project with ON DELETE CASCADE, so a DELETE would take its audit
+        # trail with it. Its keys stop first, then the project leaves every
+        # listing, then its cached keys are dropped (after the database, so a
+        # request in between cannot cache a key again).
+        now = datetime.now(timezone.utc).isoformat()
+        keys_res = await core.resources.http_client.patch(
+            f"{SUPABASE_URL}/rest/v1/api_keys",
+            params={"project_id": f"eq.{project_id}"},
             headers=get_supabase_headers(prefer="return=minimal"),
-            json={
-                "p_project_id": project_id,
-                "p_user_id": user_id
-            }
+            json={"is_active": False},
+        )
+        keys_res.raise_for_status()
+        res = await core.resources.http_client.patch(
+            f"{SUPABASE_URL}/rest/v1/projects",
+            params={"id": f"eq.{project_id}", "organization_id": f"eq.{organization_id}"},
+            headers=get_supabase_headers(prefer="return=minimal"),
+            json={"status": "deleted", "updated_at": now},
         )
         res.raise_for_status()
+        await clear_project_cache(project_id)
 
         log.info("project_deleted", user_id=user_id, project_id=project_id, organization_id=organization_id)
         return {"status": "deleted"}
