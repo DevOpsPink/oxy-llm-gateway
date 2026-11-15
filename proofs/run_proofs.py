@@ -560,7 +560,8 @@ def audit_revoke(tenants):
     assert st == 200 and str((made or {}).get("api_key", "")).startswith("oxy_"), "creating a key failed: %s" % st
     key = made["api_key"]
     st, listed, _ = http("GET", "%s/management/keys?projectId=%s" % (API, t.project), None, t.jwt_headers())
-    key_id = next(k["id"] for k in listed if k.get("key_name") == "proof-audit-revoke")
+    key_id = next((k["id"] for k in (listed or []) if k.get("name") == "proof-audit-revoke"), None)
+    assert st == 200 and key_id, "the new key is not in the dashboard's list: %s" % st
     served = [t.chat("[proof:auditrevoke:%d] ping" % i, key=key)[0] for i in range(3)]
     secret = "ghp_" + "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(36))
     refused, _ = t.chat("[proof:auditrevoke:dlp] " + secret, key=key)
@@ -599,8 +600,13 @@ def proof_audit(results, tenants):
     """Every request sent by the proofs above has a request_logs row, refusals
     included: by the budget, DLP, the kill switch, another tenant's ids, the
     burst limit. Revoking a key keeps its rows."""
-    revoke = audit_revoke(tenants)
-    limited = audit_rate_limited(tenants)
+    def step(fn):
+        try:
+            return fn(tenants)
+        except AssertionError as e:
+            return {"ok": False, "error": str(e)}
+    revoke = step(audit_revoke)
+    limited = step(audit_rate_limited)
     expected = sum(t.sent for t in tenants)
     got = None
     for _ in range(30):
