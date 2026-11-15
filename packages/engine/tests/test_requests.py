@@ -27,7 +27,7 @@ class FakeQuery:
         self._limit = n
         return self
 
-    def execute(self):
+    async def execute(self):  # the engine's PostgREST client is async
         items = self._data
         # Apply filters (simple equality)
         for field, value in self.filters.items():

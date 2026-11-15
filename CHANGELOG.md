@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.0.1 — 2026-11-15
+
+### License
+
+- `LICENSE` is the Apache License 2.0 text, unchanged. Before, it opened with a copyright header and two of its sections (6, Trademarks, and 9, Accepting Warranty) were reworded, so GitHub could not recognise the license. The copyright moves to `NOTICE`: Tatiana Mikhaleva and Vladimir Mikhalev.
+
+### Behaviour
+
+- No plan tier caps requests any more. Organizations on the `free` tier were refused after 100,000 requests in a calendar month (`403 free_plan_limit_reached`), a quota left from the hosted service; budgets are the spend control. Tiers still set project, agent and team-member caps. `tests/test_request_quota.py` sends a request for an organization far past that count and requires it to be served.
+- The dashboard's API Keys page works: it lists, creates and revokes a project's keys with the signed-in session through `/management`, instead of sending the session to `/v1/api-keys`, which takes an Oxy API key and refused it.
+- An agent session's detail no longer fails on its timeline: it filtered `request_logs` by a column that does not exist (`agent_session_id`; the column is `session_id`).
+
+- The dashboard's pages work with the signed-in session. Fifteen `/v1` routes the dashboard reads (audit log, requests, attribution, billing overview, guardrails, notifications, webhooks, organization, privacy, providers, setup, intelligence, export, cost optimizer, prompts, team) took only an Oxy API key, so every one of those pages answered 401; they now also accept the session of an active member of the organization, and the gateway itself still takes keys only. The smoke test calls every route the dashboard reads with a session.
+- `/organizations` returned an empty list for everyone (it read a nested field that is merged in), `/v1/agents` failed with 500 (the PostgREST client had no `range`), and `/v1/guardrails`, `/v1/requests` and parts of `/v1/intelligence` failed (calls not awaited, request parameters not typed). Saving notification settings a second time no longer collides with the first row.
+- The dashboard's CSV export uses `/v1/exports/requests.csv`; `/api/v1/reports/export` read a table that does not exist and is removed.
+- Another organization can no longer stop a session through `DELETE /v1/agents/{agent_id}/sessions/{session_id}`: the kill flag was set before the organization was checked.
+- Cached responses are kept per organization: the cache key left the organization out, so one organization could be answered from another's cache.
+- `/auth/sso/callback` answers 501: it took the user id and email from the request body without verifying the identity provider (harmless only because the database function it needs is missing). Accepting a team invitation answers 501 as well (its database function is missing too), and the dashboard no longer offers invitations. The README lists what else is not wired in this release.
+- `GET /public/features`, a marketing list that claimed per-agent budgets and local models, is removed; `GET /public/status` checks nothing and says so.
+
+### Tests
+
+- Every offline test runs in CI, 397 in all (one more skips itself without a live key), not a hand-picked list. The tests that failed on stale fakes are fixed; new tests cover the dashboard session, the cross-organization kill and the per-organization cache, each also run against the old code to see it fail.
+
+### Documentation
+
+- The in-app docs say what the code does: claims without a code path behind them are corrected or removed.
+- The README says which CI run its proof numbers and the walkthrough recording come from.
+- Two co-authors and maintainers on equal terms: the README's Authors section and `MAINTAINERS.md`.
+
 ## 1.0.0 — 2026-11-15
 
 Oxy is a self-hosted LLM gateway: a FastAPI engine with an OpenAI-compatible `/v1/chat/completions` endpoint, a Next.js dashboard, and Postgres with PostgREST and GoTrue for data and sign-in. It puts budgets, DLP, a kill switch, audit logs and cost attribution in front of OpenAI, Anthropic, Gemini and local models. It is an Apache 2.0 reference implementation.

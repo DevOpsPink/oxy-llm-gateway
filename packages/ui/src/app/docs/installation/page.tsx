@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { 
   Cpu, CheckCircle2, Copy, ArrowRight, 
-  Terminal, Key, Zap, AlertTriangle
+  Terminal, Key, Zap
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -60,7 +60,7 @@ export default function InstallationDocs() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Installation</h1>
-            <p className="text-slate-500">Get started in minutes</p>
+            <p className="text-slate-500">Run the stack, create a key, send a request</p>
           </div>
         </div>
       </motion.div>
@@ -72,9 +72,9 @@ export default function InstallationDocs() {
             <h2 className="text-xl font-bold text-slate-900 mb-4">Prerequisites</h2>
             <ul className="space-y-2">
               {[
-                'A running Oxy stack (docker compose up)',
-                'Your OpenAI, Anthropic, or Google API key',
-                'Python 3.8+ or Node.js 16+ (or any language with HTTP support)'
+                'A running Oxy stack: docker compose up -d --build --wait in the repository root (engine on port 8000, dashboard on port 3000)',
+                'An OpenAI, Anthropic or Google API key, added in Settings or set as OPENAI_API_KEY, ANTHROPIC_API_KEY or GOOGLE_API_KEY (GEMINI_API_KEY also works) in packages/engine/.env',
+                'Any HTTP client; the examples below use the OpenAI SDKs and curl'
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2 text-slate-600">
                   <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -97,13 +97,14 @@ export default function InstallationDocs() {
         <GlassCard>
           <div className="p-6">
             <p className="text-slate-600 mb-4">
-              Log in to your Oxy dashboard and create a new project:
+              Sign in at <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">/login</code> with a magic link (a new email
+              address creates the account) and create a project:
             </p>
             <ol className="space-y-2 text-slate-600 mb-4">
-              <li>1. Go to <strong>Dashboard → Projects</strong></li>
-              <li>2. Click <strong>"Create Project"</strong></li>
-              <li>3. Enter a name (e.g., "My AI App")</li>
-              <li>4. Set a budget limit (optional, recommended: $100)</li>
+              <li>1. Open the <strong>Control Plane</strong> (<code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">/dashboard</code>)</li>
+              <li>2. Click <strong>&quot;Create Project&quot;</strong></li>
+              <li>3. Enter a name (e.g., &quot;My AI App&quot;)</li>
+              <li>4. Optional: edit the project afterwards to set a budget, a total spend cap in USD (0 means no cap)</li>
             </ol>
             <div className="bg-slate-100 rounded-xl p-4 text-center text-slate-500">
               [Dashboard screenshot: Create Project form]
@@ -126,16 +127,16 @@ export default function InstallationDocs() {
               Create an Oxy API key for your project:
             </p>
             <ol className="space-y-2 text-slate-600 mb-4">
-              <li>1. In your project, go to <strong>Settings → API Keys</strong></li>
-              <li>2. Click <strong>"Create API Key"</strong></li>
-              <li>3. Copy the key (starts with <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">oxy_sk_</code>)</li>
+              <li>1. Open <strong>API Keys</strong> (<code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">/dashboard/api-keys</code>) and pick the project</li>
+              <li>2. Click <strong>&quot;Create API Key&quot;</strong></li>
+              <li>3. Copy the key (starts with <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">oxy_live_</code>)</li>
             </ol>
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
               <Key className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
               <div>
                 <h3 className="font-semibold text-amber-800 mb-1">Save Your Key</h3>
                 <p className="text-sm text-amber-700">
-                  Copy the key now — you won't be able to see it again. Store it securely 
+                  Copy the key now: Oxy stores only its hash and cannot show it again. Store it securely
                   (e.g., environment variables, secrets manager).
                 </p>
               </div>
@@ -176,12 +177,10 @@ client = OpenAI(api_key="sk-...")`}
               code={`from openai import OpenAI
 
 client = OpenAI(
-    api_key="sk-...",                          # Your OpenAI key
-    base_url="http://localhost:8000/v1",          # ← Add this
-    default_headers={
-        "Authorization": "Bearer oxy_sk_..."   # ← Add your Oxy key
-    }
-)`}
+    api_key="oxy_live_...",                     # ← Your Oxy key (sent as Authorization: Bearer)
+    base_url="http://localhost:8000/v1",        # ← Oxy's engine
+)
+# The provider key stays in Oxy: Settings, or OPENAI_API_KEY in the engine's environment`}
             />
           </div>
         </GlassCard>
@@ -199,11 +198,8 @@ client = OpenAI(
               code={`import OpenAI from 'openai';
 
 const client = new OpenAI({
-  apiKey: 'sk-...',                           // Your OpenAI key
-  baseURL: 'http://localhost:8000/v1',           // ← Add this
-  defaultHeaders: {
-    'Authorization': 'Bearer oxy_sk_...'      // ← Add your Oxy key
-  }
+  apiKey: 'oxy_live_...',                     // ← Your Oxy key
+  baseURL: 'http://localhost:8000/v1',        // ← Oxy's engine
 });`}
             />
           </div>
@@ -219,8 +215,7 @@ const client = new OpenAI({
             <CodeBlock 
               language="bash"
               code={`curl http://localhost:8000/v1/chat/completions \\
-  -H "Authorization: Bearer oxy_sk_..." \\
-  -H "X-OpenAI-Key: sk-..." \\
+  -H "Authorization: Bearer oxy_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "gpt-4",
@@ -247,15 +242,15 @@ const client = new OpenAI({
             <ul className="space-y-2 text-slate-600">
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                Request appears in <strong>Dashboard → Logs</strong>
+                Request appears in <strong>Dashboard → Requests</strong>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                Cost is tracked in <strong>Dashboard → Usage</strong>
+                Its cost (USD) is shown in the same <strong>Requests</strong> table
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
-                Response headers include <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">X-Oxy-Request-Id</code>
+                Response headers include <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">X-Request-ID</code> (yours, if you sent one)
               </li>
             </ul>
           </div>
@@ -267,14 +262,14 @@ const client = new OpenAI({
         <div className="bg-violet-50 border border-violet-200 rounded-xl p-6">
           <h3 className="font-semibold text-violet-800 mb-3 flex items-center gap-2">
             <Zap className="h-5 w-5" />
-            You're Protected! What's Next?
+            What&apos;s Next?
           </h3>
           <div className="grid sm:grid-cols-2 gap-4">
             {[
-              { title: 'Set up Kill Switch', href: '/docs/features/kill-switch', desc: 'Emergency stop for rogue agents' },
-              { title: 'Enable DLP', href: '/docs/features/dlp-scanning', desc: 'Prevent data leaks' },
-              { title: 'Configure Budgets', href: '/docs/features/budgets', desc: 'Prevent surprise bills' },
-              { title: 'Add Cost Attribution', href: '/docs/features/cost-attribution', desc: 'Track costs by customer' },
+              { title: 'Kill Switch', href: '/docs/features/kill-switch', desc: 'Stop an agent session' },
+              { title: 'DLP Scanning', href: '/docs/features/dlp-scanning', desc: 'Secrets in prompts are blocked' },
+              { title: 'Configure Budgets', href: '/docs/features/budgets', desc: 'Cap a project\'s spend' },
+              { title: 'Add Cost Attribution', href: '/docs/features/cost-attribution', desc: 'Track costs by tag, such as customer' },
             ].map((item) => (
               <Link key={item.title} href={item.href} className="block p-3 bg-white rounded-xl hover:shadow-md transition-shadow">
                 <div className="font-medium text-violet-700">{item.title}</div>

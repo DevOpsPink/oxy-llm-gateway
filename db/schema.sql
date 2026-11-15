@@ -2032,15 +2032,8 @@ BEGIN
       AND period_start <= now()
       AND period_end >= now();
     
-    -- 7. Determine request limit based on plan_tier
-    -- Limits must match packages/engine/routes/billing.py PLAN_LIMITS
-    v_requests_limit := CASE v_subscription.plan_tier
-        WHEN 'starter' THEN 500000      -- 500K requests
-        WHEN 'growth' THEN 2000000      -- 2M requests
-        WHEN 'business' THEN 10000000   -- 10M requests
-        WHEN 'enterprise' THEN NULL     -- Unlimited
-        ELSE 100000                     -- Free tier fallback: 100K
-    END;
+    -- 7. No tier caps requests (budgets cap spend)
+    v_requests_limit := NULL;
     
     -- 8. Build and return response
     RETURN jsonb_build_object(

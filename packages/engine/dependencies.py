@@ -155,18 +155,82 @@ def api_key_lock_name(api_key: str) -> str:
     return f"lock:api_key:{hash_key(api_key)}"
 
 
-def build_api_key_dependency(resolver_getter: Callable[[], Callable[..., Awaitable[CacheData] | CacheData]]):
+def _looks_like_session_jwt(token: str) -> bool:
+    """A GoTrue access token (a JWT), as opposed to an Oxy API key (oxy_live_...)."""
+    return token.startswith("eyJ") and token.count(".") == 2
+
+
+async def get_session_key_context(creds: HTTPAuthorizationCredentials) -> CacheData:
+    """The dashboard's signed-in session, standing in for an Oxy API key.
+
+    The dashboard's pages call the /v1 routes below with the user's session, not
+    with an Oxy API key. A session gets what a key of the same person would get:
+    any active member (owner, admin or developer) may create keys for their
+    organization, so the context is the user's first active organization and its
+    first project. GoTrue verifies the token (get_current_user).
+    """
+    user = await get_current_user(creds)
+    user_id = user["id"]
+    try:
+        res = await resources.http_client.get(
+            f"{SUPABASE_URL}/rest/v1/organization_members",
+            params={"select": "organization_id,role", "user_id": f"eq.{user_id}",
+                    "status": "eq.active", "order": "created_at.asc", "limit": "1"},
+            headers=get_supabase_headers(),
+            timeout=5.0,
+        )
+        res.raise_for_status()
+        members = res.json() or []
+        if not members:
+            raise HTTPException(status_code=403, detail="This account is not an active member of an organization")
+        org_id = members[0]["organization_id"]
+        res = await resources.http_client.get(
+            f"{SUPABASE_URL}/rest/v1/projects",
+            params={"select": "id,budget_limit", "organization_id": f"eq.{org_id}",
+                    "order": "created_at.asc", "limit": "1"},
+            headers=get_supabase_headers(),
+            timeout=5.0,
+        )
+        res.raise_for_status()
+        projects = res.json() or []
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_error_safe(log, "session_context_failed", e)
+        raise HTTPException(status_code=503, detail="Could not resolve the session's organization")
+    project = projects[0] if projects else {}
+    return {
+        "user_id": user_id,
+        "project_id": project.get("id", ""),
+        "organization_id": org_id,
+        "api_key": SecretString(""),
+        "key_id": None,
+        "budget_limit": Decimal(str(project.get("budget_limit") or 0)),
+        "created_by": user_id,
+    }
+
+
+def build_api_key_dependency(
+    resolver_getter: Callable[[], Callable[..., Awaitable[CacheData] | CacheData]],
+    allow_session: bool = False,
+):
     """
     Create a dependency that defers resolver lookup to call-time.
     
     Tests monkeypatch route modules by reassigning get_user_and_key_from_api_key;
     this wrapper ensures those overrides are respected without rebuilding routers.
+
+    allow_session: the route also accepts the dashboard's signed-in session (a
+    GoTrue JWT) in place of an Oxy API key; see get_session_key_context. Only the
+    routes the dashboard calls set it; the gateway itself takes keys only.
     """
     optional_scheme = HTTPBearer(auto_error=False)
 
     async def _dependency(
         creds: HTTPAuthorizationCredentials | None = Depends(optional_scheme),
     ) -> CacheData:
+        if allow_session and creds is not None and _looks_like_session_jwt(creds.credentials):
+            return await get_session_key_context(creds)
         resolver = resolver_getter()
         try:
             if creds is not None:

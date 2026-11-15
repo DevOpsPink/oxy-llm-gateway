@@ -336,7 +336,7 @@ const features: { icon: ComponentType<SVGProps<SVGSVGElement>>; title: string; b
   {
     icon: Workflow,
     title: 'Webhooks and integrations',
-    body: 'Best-effort outbound to Slack, Discord, Zapier, HubSpot, and custom webhooks. Anomaly detection and budget alerts trigger automatically.',
+    body: 'Best-effort outbound webhooks for Slack, Discord, Zapier and your own endpoints, configured per organization.',
   },
   {
     icon: KeyRound,
@@ -350,7 +350,7 @@ const stack: { label: string; value: string }[] = [
   { label: 'Frontend', value: 'Next.js (App Router), TypeScript strict, Tailwind, Radix' },
   { label: 'Data', value: 'Postgres 16, PostgREST 12, GoTrue v2, Redis 7' },
   { label: 'Infra', value: 'docker-compose, nginx (URL-shape adapter), Caddy for prod TLS' },
-  { label: 'Tests', value: '289 offline pytest cases, Vitest + Playwright on the UI' },
+  { label: 'Tests', value: '397 offline pytest cases, Vitest + Playwright on the UI' },
 ]
 
 const comparison = [

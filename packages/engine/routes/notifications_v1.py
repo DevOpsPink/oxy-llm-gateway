@@ -9,7 +9,8 @@ from core.audit import log_admin_event
 from dependencies import CacheData, build_api_key_dependency, get_user_and_key_from_api_key, get_supabase_headers
 
 router = APIRouter(prefix="/v1", tags=["notifications"])
-api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key)
+# The dashboard calls these routes with its session; scripts with an Oxy API key.
+api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key, allow_session=True)
 
 ALLOWED_EVENTS = {"budget.threshold_crossed", "anomaly.raised", "request.created"}
 SLACK_PREFIX = "https://hooks.slack.com/"
@@ -173,7 +174,8 @@ async def update_notification_settings(
         res = await resources.http_client.post(
             f"{SUPABASE_URL}/rest/v1/notification_settings",
             params={"on_conflict": "organization_id"},
-            headers={**get_supabase_headers(), "Prefer": "return=representation"},
+            # Update the organization's row when it exists, instead of a duplicate-key error.
+            headers={**get_supabase_headers(), "Prefer": "return=representation,resolution=merge-duplicates"},
             json={**payload, "organization_id": org_id},
         )
     res.raise_for_status()

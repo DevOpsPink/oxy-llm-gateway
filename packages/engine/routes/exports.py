@@ -9,7 +9,8 @@ from core import resources
 from dependencies import CacheData, build_api_key_dependency, get_user_and_key_from_api_key
 
 router = APIRouter(prefix="/v1", tags=["exports"])
-api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key)
+# The dashboard calls these routes with its session; scripts with an Oxy API key.
+api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key, allow_session=True)
 
 MAX_ROWS = 50_000
 DEFAULT_RANGE_DAYS = 30

@@ -1,15 +1,15 @@
 'use client'
 
 /**
- * ?? AI COST OPTIMIZER DOCUMENTATION
+ * COST OPTIMIZER DOCUMENTATION
  * ===================================
  */
 
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { 
-  Lightbulb, DollarSign, TrendingDown, CheckCircle2, 
-  ArrowRight, Copy, Zap, Brain, BarChart3
+  Lightbulb, TrendingDown, CheckCircle2, 
+  ArrowRight, Copy, Zap, BarChart3, Info
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -55,7 +55,7 @@ export default function CostOptimizerDocs() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-slate-900">AI Cost Optimizer</h1>
-            <p className="text-slate-500">AI-powered savings recommendations to help reduce spend.</p>
+            <p className="text-slate-500">Rule-based savings estimates from your request logs. No model is called.</p>
           </div>
         </div>
       </motion.div>
@@ -64,9 +64,9 @@ export default function CostOptimizerDocs() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <div className="grid grid-cols-3 gap-4">
           {[
-            { icon: TrendingDown, label: 'Output', value: 'Ranked actions', color: 'text-emerald-600' },
-            { icon: Brain, label: 'Powered by', value: 'Claude', color: 'text-violet-600' },
-            { icon: BarChart3, label: 'Analysis Window', value: '30 days', color: 'text-amber-600' },
+            { icon: TrendingDown, label: 'Output', value: 'Up to 3 estimates', color: 'text-emerald-600' },
+            { icon: Zap, label: 'Method', value: 'Fixed rules', color: 'text-violet-600' },
+            { icon: BarChart3, label: 'Analysis Window', value: '7 or 30 days', color: 'text-amber-600' },
           ].map((stat) => (
             <GlassCard key={stat.label}>
               <div className="p-4 text-center">
@@ -85,16 +85,17 @@ export default function CostOptimizerDocs() {
           <div className="p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-4">How It Works</h2>
             <p className="text-slate-600 mb-4">
-              The AI Cost Optimizer analyzes your last 30 days of usage and provides personalized 
-              recommendations to reduce costs without impacting quality.
+              The optimizer groups your organization&apos;s <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">request_logs</code> rows
+              in the window by model and provider, then applies three fixed rules. It does not read prompts or measure
+              quality, and it changes nothing.
             </p>
             
             <div className="space-y-4">
               {[
-                { step: '1', title: 'Analyze Usage', desc: 'We examine your request patterns, model choices, and token usage' },
-                { step: '2', title: 'Identify Patterns', desc: 'Find expensive models used for simple tasks, cacheable requests, etc.' },
-                { step: '3', title: 'Generate Recommendations', desc: 'Claude creates specific, actionable cost-saving suggestions' },
-                { step: '4', title: 'Estimate Savings', desc: 'Each recommendation includes projected monthly savings' },
+                { step: '1', title: 'Aggregate Usage', desc: 'Per model and provider: total cost, request count, and average prompt and completion tokens (at most 200 groups).' },
+                { step: '2', title: 'Model Switch', desc: 'The costliest model with a cheaper alternative in a fixed list (gpt-4.1 or gpt-4 → gpt-4.1-mini, claude-3-opus → claude-3-sonnet, claude-3.5-sonnet → claude-3-haiku). Assumes half its requests could move and prices both models from the pricing table.' },
+                { step: '3', title: 'Caching', desc: 'Assumes 15% duplicate requests if the costliest group has more than 50 requests (5% otherwise) and a 20% saving on those. Duplicates are not measured.' },
+                { step: '4', title: 'Throttling', desc: 'The first group with more than 100 requests averaging under $0.0005 each; estimates 5% of its cost.' },
               ].map((item) => (
                 <div key={item.step} className="flex items-start gap-4">
                   <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm shrink-0">
@@ -117,12 +118,15 @@ export default function CostOptimizerDocs() {
         <GlassCard>
           <div className="p-6">
             <p className="text-slate-600 mb-4">
-              Access your personalized recommendations via the dashboard or API:
+              <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">GET /v1/cost-optimizer/recommendations</code> takes
+              an Oxy API key or the dashboard&apos;s signed-in session (the dashboard&apos;s Optimizer page uses it).
+              <code> window</code> is <code>7d</code> or <code>30d</code> (default <code>30d</code>);
+              <code> limit</code> is 1 to 50 (default 10). Other values get a 422.
             </p>
             <CodeBlock 
               language="bash"
-              code={`curl http://localhost:8000/api/v1/cost-optimizer/analyze \\
-  -H "Authorization: Bearer oxy_sk_..."`}
+              code={`curl "http://localhost:8000/v1/cost-optimizer/recommendations?window=30d" \\
+  -H "Authorization: Bearer oxy_live_..."`}
             />
           </div>
         </GlassCard>
@@ -136,43 +140,45 @@ export default function CostOptimizerDocs() {
             <CodeBlock 
               language="json"
               code={`{
-  "analysis_period": "2024-01-01 to 2024-01-31",
-  "total_spend": 2847.52,
-  "potential_savings": 312.40,
+  "window": "30d",
+  "currency": "USD",
+  "estimates_only": true,
+  "data_source": "request_logs",
+  "data_window_start": "2026-10-16T12:00:00+00:00",
+  "estimated_total_savings_usd": 41.27,
   "recommendations": [
     {
-      "id": "rec_001",
-      "type": "model_downgrade",
-      "title": "Use GPT-3.5 for classification tasks",
-      "description": "You're using GPT-4 for 2,340 classification requests. GPT-3.5 achieves 99% same accuracy for this task type.",
-      "current_model": "gpt-4",
-      "suggested_model": "gpt-3.5-turbo",
-      "affected_requests": 2340,
-      "estimated_savings_monthly": 187.20,
-      "implementation": "Add model routing based on task type"
+      "type": "model_switch",
+      "title": "Heuristic: move low-risk gpt-4 traffic to gpt-4.1-mini",
+      "description": "About half of gpt-4 requests look low-creative. Switching those to gpt-4.1-mini could reduce spend; estimate only.",
+      "estimated_monthly_savings_usd": 38.9,
+      "confidence": "medium",
+      "affected_models": ["gpt-4", "gpt-4.1-mini"],
+      "supporting_stats": {
+        "requests": 1200,
+        "avg_prompt_tokens": 410.5,
+        "avg_completion_tokens": 120.2
+      }
     },
     {
-      "id": "rec_002", 
       "type": "enable_caching",
-      "title": "Enable caching for repeated prompts",
-      "description": "34% of your requests are identical. Enable response caching to eliminate duplicate API calls.",
-      "duplicate_percentage": 34,
-      "estimated_savings_monthly": 89.40,
-      "implementation": "Set temperature=0 for deterministic outputs"
-    },
-    {
-      "id": "rec_003",
-      "type": "prompt_optimization",
-      "title": "Reduce system prompt length",
-      "description": "Your average system prompt is 847 tokens. Similar prompts achieve same results with 340 tokens.",
-      "current_avg_tokens": 847,
-      "suggested_avg_tokens": 340,
-      "estimated_savings_monthly": 35.80,
-      "implementation": "Compress system prompts, move examples to few-shot"
+      "title": "Enable response caching for repeated prompts",
+      "description": "Traffic appears repetitive. Caching similar prompts could trim duplicate calls (estimate only).",
+      "estimated_monthly_savings_usd": 2.37,
+      "confidence": "high",
+      "supporting_stats": {
+        "duplicate_ratio": 0.15,
+        "requests_sampled": 1200
+      }
     }
   ]
 }`}
             />
+            <p className="text-sm text-slate-500 mt-4">
+              Recommendations are sorted by estimated savings. Despite its name,
+              <code> estimated_monthly_savings_usd</code> is computed from the cost in the chosen window, so with
+              <code> window=7d</code> it is a 7-day figure.
+            </p>
           </div>
         </GlassCard>
       </motion.div>
@@ -181,38 +187,32 @@ export default function CostOptimizerDocs() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
         <GlassCard>
           <div className="p-6">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">Common Recommendations</h2>
+            <h2 className="text-xl font-bold text-slate-900 mb-4">Recommendation Types</h2>
             <div className="space-y-4">
               {[
                 { 
-                  icon: '??', 
-                  title: 'Model Downgrade', 
-                  desc: 'Use cheaper models for simple tasks (classification, extraction)',
-                  savings: 'Lower per-token cost'
+                  icon: TrendingDown, 
+                  title: 'model_switch', 
+                  desc: 'Move part of one model\'s traffic to a cheaper model from the fixed list',
+                  savings: 'Confidence: medium'
                 },
                 { 
-                  icon: '??', 
-                  title: 'Response Caching', 
-                  desc: 'Cache identical requests to avoid repeated API calls',
-                  savings: 'Fewer provider calls'
+                  icon: Zap, 
+                  title: 'enable_caching', 
+                  desc: 'Turn on response caching for repeated prompts',
+                  savings: 'Confidence: high or medium'
                 },
                 { 
-                  icon: '??', 
-                  title: 'Prompt Compression', 
-                  desc: 'Reduce token count in system prompts',
-                  savings: 'Fewer input tokens'
-                },
-                { 
-                  icon: '??', 
-                  title: 'Batch Requests', 
-                  desc: 'Combine multiple small requests into batches',
-                  savings: 'Fewer requests'
+                  icon: BarChart3, 
+                  title: 'rate_limit', 
+                  desc: 'Throttle high-volume, low-cost traffic',
+                  savings: 'Confidence: low'
                 },
               ].map((item) => (
                 <div key={item.title} className="flex items-start gap-4 p-3 bg-slate-50 rounded-xl">
-                  <div className="text-2xl">{item.icon}</div>
+                  <item.icon className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <div className="font-medium text-slate-900">{item.title}</div>
+                    <div className="font-medium text-slate-900"><code>{item.title}</code></div>
                     <div className="text-sm text-slate-600">{item.desc}</div>
                   </div>
                   <div className="text-sm font-semibold text-emerald-600">{item.savings}</div>
@@ -223,15 +223,15 @@ export default function CostOptimizerDocs() {
         </GlassCard>
       </motion.div>
 
-      {/* Availability */}
+      {/* Advisory */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
         <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 flex gap-3">
-          <Zap className="h-5 w-5 text-violet-600 shrink-0 mt-0.5" />
+          <Info className="h-5 w-5 text-violet-600 shrink-0 mt-0.5" />
           <div>
-            <h3 className="font-semibold text-violet-800 mb-1">Plan tier</h3>
+            <h3 className="font-semibold text-violet-800 mb-1">Estimates only</h3>
             <p className="text-sm text-violet-700">
-              The optimizer runs for orgs on the growth, business, or enterprise plan tier. The operator
-              sets an org&apos;s tier in the database. <Link href="/pricing" className="underline">Plan limits</Link>.
+              Every figure comes from the fixed ratios above applied to logged cost, not from a test of your traffic.
+              Treat the output as a prompt to look closer. With no logged requests in the window, the list is empty.
             </p>
           </div>
         </div>
@@ -241,7 +241,7 @@ export default function CostOptimizerDocs() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
         <div className="flex justify-between items-center pt-8 border-t border-slate-200">
           <Link href="/docs/features/response-caching" className="text-slate-600 hover:text-slate-900 text-sm font-medium">
-            ? Response Caching
+            ← Response Caching
           </Link>
           <Link href="/docs/features/cost-attribution" className="text-violet-600 hover:text-violet-700 text-sm font-medium flex items-center gap-1">
             Next: Cost Attribution <ArrowRight className="h-4 w-4" />
@@ -251,4 +251,3 @@ export default function CostOptimizerDocs() {
     </div>
   )
 }
-

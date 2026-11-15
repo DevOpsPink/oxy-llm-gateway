@@ -22,7 +22,6 @@ const plans = [
     id: 'free',
     name: 'Free',
     default: true,
-    requests: '100K / month',
     projects: '1',
     agents: '3',
     members: '1 (solo)',
@@ -30,7 +29,6 @@ const plans = [
   {
     id: 'starter',
     name: 'Starter',
-    requests: '500K / month',
     projects: '5',
     agents: '10',
     members: '3',
@@ -38,7 +36,6 @@ const plans = [
   {
     id: 'growth',
     name: 'Growth',
-    requests: '2M / month',
     projects: '20',
     agents: '50',
     members: '10',
@@ -46,7 +43,6 @@ const plans = [
   {
     id: 'business',
     name: 'Business',
-    requests: '10M / month',
     projects: 'unlimited',
     agents: 'unlimited',
     members: '50',
@@ -54,7 +50,6 @@ const plans = [
   {
     id: 'enterprise',
     name: 'Enterprise',
-    requests: 'unlimited',
     projects: 'unlimited',
     agents: 'unlimited',
     members: 'unlimited',
@@ -109,7 +104,6 @@ export default function PlanLimitsPage() {
             <thead>
               <tr className="border-b border-slate-200">
                 <th className="text-left py-3 px-4 font-semibold text-slate-700">Plan</th>
-                <th className="text-left py-3 px-4 font-semibold text-slate-700">Requests</th>
                 <th className="text-left py-3 px-4 font-semibold text-slate-700">Projects</th>
                 <th className="text-left py-3 px-4 font-semibold text-slate-700">Agents</th>
                 <th className="text-left py-3 px-4 font-semibold text-slate-700">Team</th>
@@ -127,7 +121,6 @@ export default function PlanLimitsPage() {
                       </span>
                     )}
                   </td>
-                  <td className="py-4 px-4 text-slate-700">{p.requests}</td>
                   <td className="py-4 px-4 text-slate-700">{p.projects}</td>
                   <td className="py-4 px-4 text-slate-700">{p.agents}</td>
                   <td className="py-4 px-4 text-slate-700">{p.members}</td>
@@ -139,21 +132,11 @@ export default function PlanLimitsPage() {
 
         <div className="mt-12 grid md:grid-cols-2 gap-6 max-w-4xl">
           <div className="rounded-xl border border-slate-200 bg-white p-6">
-            <h3 className="font-semibold text-slate-900">How enforcement works</h3>
+            <h3 className="font-semibold text-slate-900">No request quota</h3>
             <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-              The engine counts rows in <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">request_logs</code>{' '}
-              per org per UTC calendar month. Pre-flight rejections (DLP blocks, expired keys,
-              malformed requests) generally don't count. When an org crosses its plan's monthly
-              cap, the gateway returns an explicit{' '}
-              <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">free_plan_limit_reached</code>{' '}
-              error with budget context. See{' '}
-              <Link
-                href={`${REPO_URL}/blob/main/packages/engine/tests/test_free_plan_limits.py`}
-                className="text-violet-600 hover:underline"
-              >
-                test_free_plan_limits.py
-              </Link>{' '}
-              for the exact behaviour.
+              No tier caps how many requests an organization sends. Spend is capped by each
+              project&apos;s budget, checked before a request reaches a provider. Requests are still
+              counted per organization and UTC calendar month for the dashboard.
             </p>
           </div>
 

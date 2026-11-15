@@ -13,7 +13,7 @@ Practical checklist for core contributors.
 - `SUPABASE_SERVICE_KEY` — service-role JWT signed with `SUPABASE_JWT_SECRET`.
 - `OXY_API_KEY` — Dev API key for gateway smoke (seeded by schema.sql for local dev).
 - Optional: `OPENAI_API_KEY`, `OPENAI_API_BASE`, `REDIS_PASSWORD`, Stripe/etc. as per service needs.
-- Plan tiers: quota levels the operator assigns per org in `organizations.subscription_plan` (default `free`, capped at 100K requests/month per org, UTC). Set `starter`/`growth`/`business`/`enterprise` in the DB to raise the caps; values live in `PLAN_LIMITS` (`routes/billing.py`), the project caps in `main.py`, and `fn_get_subscription_status` in `db/schema.sql`. See `docs/getting-started/free-tier.md`.
+- Plan tiers: levels the operator assigns per org in `organizations.subscription_plan` (default `free`). They set project, agent and team-member caps (`PLAN_LIMITS` in `routes/billing.py`, the project caps in `main.py`); no tier caps requests. See `docs/getting-started/free-tier.md`.
 - Intelligence: `GET /v1/intelligence/overview` surfaces anomalies, cost insights, forecast, and a heuristic security score (based on guardrails/DLP/rate limits). Forecast is best-effort, not a billing guarantee.
 - Exports/Audit: `GET /v1/exports/requests.csv` (params: from, to, model, provider, status, limit<=50k) returns request logs as CSV for audit. Retention duration is an operational policy (`request_log_retention_days`, 7–2555 days).
 - Cost attribution: `GET /v1/attribution/summary` groups spend by cost attribution tags (customer/team/feature). Params: from, to, key, limit (max 100). Default range = month-to-date.

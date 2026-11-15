@@ -3,16 +3,17 @@
 /**
  * 🤖 AGENT TEMPLATES DOCUMENTATION
  * =================================
- * 
- * Source: routes/agents.py:49 (agent_type field)
+ *
+ * Source: routes/agents.py (AgentCreate.agent_type, create_agent, list_agents),
+ * db/schema.sql (agents table), routes/agent_templates.py (not mounted in main.py)
  */
 
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { 
-  Bot, CheckCircle2, ArrowRight, Copy, 
+import {
+  Bot, CheckCircle2, ArrowRight, Copy,
   Code2, MessageSquare, Server, Shield, BarChart3,
-  FileText, Search, Workflow, Sparkles
+  FileText, Search, Workflow, Sparkles, AlertTriangle
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -33,7 +34,7 @@ function CodeBlock({ code, language = 'python' }: { code: string; language?: str
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-  
+
   return (
     <div className="relative group">
       <div className="absolute top-3 left-4 text-xs text-slate-500 font-mono">{language}</div>
@@ -47,106 +48,27 @@ function CodeBlock({ code, language = 'python' }: { code: string; language?: str
   )
 }
 
-const agentTemplates = [
-  {
-    type: 'code_review',
-    name: 'Code Review',
-    icon: Code2,
-    color: 'from-blue-500 to-indigo-600',
-    desc: 'Review PRs, find bugs, suggest improvements',
-    models: ['gpt-4', 'claude-3-opus'],
-    tokenLimit: 8192,
-    budgetDefault: 50,
-    tools: ['github_api', 'file_read']
-  },
-  {
-    type: 'support',
-    name: 'Customer Support',
-    icon: MessageSquare,
-    color: 'from-emerald-500 to-teal-600',
-    desc: 'Answer questions, resolve tickets, escalate issues',
-    models: ['gpt-3.5-turbo', 'claude-3-haiku'],
-    tokenLimit: 4096,
-    budgetDefault: 100,
-    tools: ['zendesk_api', 'knowledge_base']
-  },
-  {
-    type: 'devops',
-    name: 'DevOps',
-    icon: Server,
-    color: 'from-orange-500 to-red-600',
-    desc: 'Deploy, monitor, fix infrastructure issues',
-    models: ['gpt-4', 'claude-3-sonnet'],
-    tokenLimit: 4096,
-    budgetDefault: 75,
-    tools: ['shell_exec', 'kubernetes_api', 'aws_api']
-  },
-  {
-    type: 'security',
-    name: 'Security',
-    icon: Shield,
-    color: 'from-rose-500 to-pink-600',
-    desc: 'Scan for vulnerabilities, analyze threats',
-    models: ['gpt-4', 'claude-3-opus'],
-    tokenLimit: 8192,
-    budgetDefault: 100,
-    tools: ['file_read', 'http_get']
-  },
-  {
-    type: 'data_analysis',
-    name: 'Data Analysis',
-    icon: BarChart3,
-    color: 'from-violet-500 to-purple-600',
-    desc: 'Query databases, generate reports, visualize data',
-    models: ['gpt-4-turbo', 'claude-3-sonnet'],
-    tokenLimit: 16384,
-    budgetDefault: 150,
-    tools: ['sql_query', 'python_exec']
-  },
-  {
-    type: 'content',
-    name: 'Content',
-    icon: FileText,
-    color: 'from-amber-500 to-orange-600',
-    desc: 'Write articles, social posts, marketing copy',
-    models: ['gpt-4', 'claude-3-opus'],
-    tokenLimit: 8192,
-    budgetDefault: 50,
-    tools: ['web_search', 'image_gen']
-  },
-  {
-    type: 'research',
-    name: 'Research',
-    icon: Search,
-    color: 'from-cyan-500 to-blue-600',
-    desc: 'Search web, summarize papers, compile findings',
-    models: ['gpt-4-turbo', 'claude-3-sonnet'],
-    tokenLimit: 32768,
-    budgetDefault: 200,
-    tools: ['web_search', 'pdf_read', 'arxiv_api']
-  },
-  {
-    type: 'automation',
-    name: 'Automation',
-    icon: Workflow,
-    color: 'from-slate-500 to-slate-700',
-    desc: 'Automate workflows, schedule tasks, integrate APIs',
-    models: ['gpt-3.5-turbo', 'claude-3-haiku'],
-    tokenLimit: 4096,
-    budgetDefault: 75,
-    tools: ['http_post', 'zapier_api', 'slack_api']
-  },
-  {
-    type: 'custom',
-    name: 'Custom',
-    icon: Sparkles,
-    color: 'from-fuchsia-500 to-pink-600',
-    desc: 'Build your own with custom settings',
-    models: ['any'],
-    tokenLimit: 'custom',
-    budgetDefault: 'custom',
-    tools: ['custom']
-  }
+const agentTypes = [
+  { type: 'custom', name: 'Custom', icon: Sparkles, color: 'from-fuchsia-500 to-pink-600' },
+  { type: 'code_review', name: 'Code Review', icon: Code2, color: 'from-blue-500 to-indigo-600' },
+  { type: 'support', name: 'Support', icon: MessageSquare, color: 'from-emerald-500 to-teal-600' },
+  { type: 'devops', name: 'DevOps', icon: Server, color: 'from-orange-500 to-red-600' },
+  { type: 'security', name: 'Security', icon: Shield, color: 'from-rose-500 to-pink-600' },
+  { type: 'data_analysis', name: 'Data Analysis', icon: BarChart3, color: 'from-violet-500 to-purple-600' },
+  { type: 'content', name: 'Content', icon: FileText, color: 'from-amber-500 to-orange-600' },
+  { type: 'research', name: 'Research', icon: Search, color: 'from-cyan-500 to-blue-600' },
+  { type: 'automation', name: 'Automation', icon: Workflow, color: 'from-slate-500 to-slate-700' },
+]
+
+const agentDefaults = [
+  { field: 'default_model', value: '"gpt-4o"' },
+  { field: 'allowed_models', value: '["gpt-4o", "claude-3-5-sonnet", "gemini-1.5-pro"]' },
+  { field: 'allowed_tools', value: '[]' },
+  { field: 'max_tokens_per_request', value: '4096 (1 to 128000)' },
+  { field: 'max_requests_per_session', value: '100 (1 to 10000)' },
+  { field: 'max_tool_calls_per_session', value: '50 (1 to 1000)' },
+  { field: 'budget_limit', value: '0.00 USD (0 = no limit)' },
+  { field: 'reset_period', value: '"monthly" (daily, weekly, monthly, never)' },
 ]
 
 export default function AgentTemplatesDocs() {
@@ -160,22 +82,22 @@ export default function AgentTemplatesDocs() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Agent Templates</h1>
-            <p className="text-slate-500">9 pre-configured agent types. Or build your own.</p>
+            <p className="text-slate-500">An agent carries an <code>agent_type</code> label with nine allowed values. The label applies no preset.</p>
           </div>
         </div>
       </motion.div>
 
-      {/* What's included */}
+      {/* What agent_type does */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <GlassCard>
           <div className="p-6">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">What Each Template Includes</h2>
+            <h2 className="text-xl font-bold text-slate-900 mb-4">What agent_type Does</h2>
             <div className="grid sm:grid-cols-2 gap-4">
               {[
-                { label: 'Model Allowlist', desc: 'Recommended models for the use case' },
-                { label: 'Token Limits', desc: 'Max tokens per request, optimized for task' },
-                { label: 'Budget Defaults', desc: 'Sensible spending limits' },
-                { label: 'Tool Permissions', desc: 'Which APIs and actions are allowed' },
+                { label: 'Validated', desc: 'Must be one of the nine values below; default custom. Anything else is rejected with 422.' },
+                { label: 'Stored', desc: 'Saved on the agent row and returned by the agents API.' },
+                { label: 'Filterable', desc: 'GET /v1/agents?agent_type=support lists only agents with that label.' },
+                { label: 'No presets', desc: 'Models, token limits, budget and tools take the same defaults for every type.' },
               ].map((item) => (
                 <div key={item.label} className="flex items-start gap-3">
                   <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -190,143 +112,121 @@ export default function AgentTemplatesDocs() {
         </GlassCard>
       </motion.div>
 
-      {/* Template Grid */}
+      {/* Type Grid */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">Available Templates</h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-4">Valid agent_type Values</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {agentTemplates.map((template) => (
+          {agentTypes.map((template) => (
             <GlassCard key={template.type}>
               <div className="p-5">
                 <div className={`w-10 h-10 rounded-xl bg-linear-to-br ${template.color} flex items-center justify-center mb-3`}>
                   <template.icon className="h-5 w-5 text-white" />
                 </div>
                 <h3 className="font-semibold text-slate-900 mb-1">{template.name}</h3>
-                <p className="text-sm text-slate-600 mb-3">{template.desc}</p>
-                <div className="space-y-1 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Models:</span>
-                    <span className="text-slate-700">{Array.isArray(template.models) ? template.models.slice(0, 2).join(', ') : template.models}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Token Limit:</span>
-                    <span className="text-slate-700">{typeof template.tokenLimit === 'number' ? template.tokenLimit.toLocaleString() : template.tokenLimit}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Budget:</span>
-                    <span className="text-slate-700">{typeof template.budgetDefault === 'number' ? `$${template.budgetDefault}/mo` : template.budgetDefault}</span>
-                  </div>
-                </div>
+                <code className="text-sm text-slate-600">{template.type}</code>
               </div>
             </GlassCard>
           ))}
         </div>
       </motion.div>
 
-      {/* How to create */}
+      {/* Defaults */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">Create an Agent from Template</h2>
         <GlassCard>
           <div className="p-6">
-            <CodeBlock 
-              language="python"
-              code={`from oxy import OxyClient
-
-client = OxyClient(api_key="oxy_sk_...")
-
-# Create agent from template
-agent = client.agents.create(
-    name="Support Bot",
-    agent_type="support",           # ← Template type
-    description="Customer support for Acme Corp",
-    
-    # Override template defaults (optional)
-    default_model="gpt-4-turbo",
-    max_tokens_per_request=8192,
-    budget_limit=200.00,
-    
-    # Custom tool permissions
-    allowed_tools=["zendesk_api", "knowledge_base", "slack_notify"]
-)
-
-print(f"Agent created: {agent.id}")  # agent_abc123`}
-            />
+            <h2 className="text-xl font-bold text-slate-900 mb-4">Defaults for Every Agent</h2>
+            <p className="text-sm text-slate-600 mb-4">Used when a field is left out of the create request, whatever the agent_type.</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <tbody className="text-slate-700">
+                  {agentDefaults.map((row) => (
+                    <tr key={row.field} className="border-b border-slate-100 last:border-0">
+                      <td className="py-2 pr-4"><code className="bg-slate-100 px-1 rounded">{row.field}</code></td>
+                      <td className="py-2"><code className="text-slate-600">{row.value}</code></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </GlassCard>
       </motion.div>
 
       {/* API Reference */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">API Reference</h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-4">Create an Agent</h2>
         <GlassCard>
-          <div className="p-6">
-            <CodeBlock 
+          <div className="p-6 space-y-4">
+            <p className="text-sm text-slate-600">
+              <code className="bg-slate-100 px-1 rounded">/v1/agents</code> takes a dashboard user&apos;s access token (the
+              Supabase session JWT), not an <code className="bg-slate-100 px-1 rounded">oxy_live_</code> API key. Only an
+              organization owner or admin can create agents.
+            </p>
+            <CodeBlock
               language="bash"
-              code={`# Create agent via REST API
-curl -X POST http://localhost:8000/v1/agents \\
-  -H "Authorization: Bearer oxy_sk_..." \\
+              code={`curl -X POST http://localhost:8000/v1/agents \\
+  -H "Authorization: Bearer <user access token>" \\
   -H "Content-Type: application/json" \\
   -d '{
     "name": "Code Reviewer",
+    "project_id": "<project uuid>",
     "agent_type": "code_review",
     "description": "Reviews PRs in our monorepo",
-    "default_model": "gpt-4",
-    "budget_limit": 100.00,
-    "allowed_models": ["gpt-4", "gpt-4-turbo", "claude-3-opus"]
+    "default_model": "gpt-4o",
+    "budget_limit": 100.00
   }'
 
-# Response
+# Response (abbreviated)
 {
-  "id": "agent_abc123",
-  "name": "Code Reviewer",
-  "agent_type": "code_review",
-  "status": "active",
-  "budget_limit": 100.00,
-  "current_spend": 0.00,
-  "created_at": "2025-01-15T10:00:00Z"
+  "success": true,
+  "agent": {
+    "id": "<uuid>",
+    "name": "Code Reviewer",
+    "agent_type": "code_review",
+    "status": "active",
+    "budget_limit": 100.00,
+    "current_spend": 0.00,
+    "created_at": "..."
+  }
 }`}
             />
+            <ul className="text-sm text-slate-600 space-y-1">
+              <li>• <strong>401</strong>: missing, invalid or expired token</li>
+              <li>• <strong>403</strong>: not an owner or admin, or the organization already has as many agents (not disabled) as its plan tier allows: free 3, starter 10, growth 50, business and enterprise 9999. The operator sets the tier in the database.</li>
+              <li>• <strong>404</strong>: the project does not belong to your organization</li>
+              <li>• <strong>409</strong>: an agent with this name already exists in the organization</li>
+            </ul>
           </div>
         </GlassCard>
       </motion.div>
 
-      {/* Valid agent types */}
+      {/* Template endpoints */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
         <GlassCard>
           <div className="p-6">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">Valid Agent Types</h2>
-            <div className="flex flex-wrap gap-2">
-              {['custom', 'code_review', 'support', 'devops', 'security', 'data_analysis', 'content', 'research', 'automation'].map((type) => (
-                <code key={type} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-sm">
-                  {type}
-                </code>
-              ))}
-            </div>
+            <h2 className="text-xl font-bold text-slate-900 mb-4">Saved Templates</h2>
+            <p className="text-sm text-slate-600">
+              <code className="bg-slate-100 px-1 rounded">routes/agent_templates.py</code> defines a{' '}
+              <code className="bg-slate-100 px-1 rounded">/v1/agent-templates</code> API, but <code className="bg-slate-100 px-1 rounded">main.py</code> does
+              not include that router and <code className="bg-slate-100 px-1 rounded">db/schema.sql</code> has no{' '}
+              <code className="bg-slate-100 px-1 rounded">agent_templates</code> table, so those paths return 404.
+            </p>
           </div>
         </GlassCard>
       </motion.div>
 
-      {/* Best practices */}
+      {/* Enforcement */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
-        <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
-          <h3 className="font-semibold text-violet-800 mb-2">💡 Best Practices</h3>
-          <ul className="space-y-2 text-sm text-violet-700">
-            <li className="flex items-start gap-2">
-              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-              <span><strong>Start with templates</strong> — they have production-tested settings</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-              <span><strong>Set budget limits</strong> — every agent should have a spending cap</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-              <span><strong>Use model allowlists</strong> — don't let agents switch to expensive models</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-              <span><strong>Limit tools</strong> — principle of least privilege for tool access</span>
-            </li>
-          </ul>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-amber-800 mb-1">Stored, Not Enforced</h3>
+            <p className="text-sm text-amber-700">
+              <code>allowed_models</code>, <code>allowed_tools</code>, <code>max_tokens_per_request</code>, the per-session
+              limits and the per-agent <code>budget_limit</code> are saved and returned, but no request path reads them.
+              Spending on <code>/v1/chat/completions</code> is limited by the project&apos;s <code>budget_limit</code>.
+            </p>
+          </div>
         </div>
       </motion.div>
 
@@ -344,4 +244,3 @@ curl -X POST http://localhost:8000/v1/agents \\
     </div>
   )
 }
-

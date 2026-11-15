@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { 
   Shield, Zap, Clock, AlertTriangle, CheckCircle2, 
-  ArrowRight, Copy, Terminal, Code2
+  ArrowRight, Copy
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -55,7 +55,7 @@ export default function KillSwitchDocs() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Kill Switch</h1>
-            <p className="text-slate-500">Stop any AI agent in under 5 milliseconds</p>
+            <p className="text-slate-500">End an agent session; Oxy refuses its later requests</p>
           </div>
         </div>
       </motion.div>
@@ -64,9 +64,9 @@ export default function KillSwitchDocs() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <div className="grid grid-cols-3 gap-4">
           {[
-            { icon: Zap, label: 'Latency', value: 'Fast response', color: 'text-amber-600' },
-            { icon: Clock, label: 'Availability', value: 'High availability', color: 'text-emerald-600' },
-            { icon: Shield, label: 'Fail Mode', value: 'Fail-open', color: 'text-violet-600' },
+            { icon: Clock, label: 'First refusal after the kill call (measured in CI)', value: '~100–300 ms', color: 'text-amber-600' },
+            { icon: Zap, label: 'Scope', value: 'One session', color: 'text-emerald-600' },
+            { icon: Shield, label: 'Fail Mode', value: 'Fail-closed', color: 'text-violet-600' },
           ].map((stat) => (
             <GlassCard key={stat.label}>
               <div className="p-4 text-center">
@@ -85,16 +85,16 @@ export default function KillSwitchDocs() {
           <div className="p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-4">What is Kill Switch?</h2>
             <p className="text-slate-600 mb-4">
-              Kill Switch is an emergency stop mechanism that instantly terminates any AI agent session. 
-              When triggered, it:
+              The kill switch ends one agent session. Requests belong to a session when they carry its id in
+              the <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">X-Oxy-Session-Id</code> header. When triggered, it:
             </p>
             <ul className="space-y-3">
               {[
-                'Publishes a Redis signal in <1ms',
-                'Blocks all in-flight requests for that agent',
-                'Returns 410 Gone status to the client',
-                'Logs the kill event for audit trail',
-                'Keeps other agents running normally'
+                'Marks the session killed in Postgres (agent_sessions, the authority) and sets a Redis flag (the fast path, kept for 1 hour)',
+                'Refuses later requests carrying that X-Oxy-Session-Id with 410 session_terminated',
+                'Stops a streaming response for that session after its next chunk; a non-streaming call already sent to the provider completes',
+                'Records agent_session.killed in the audit log (API call below)',
+                'Leaves the agent\'s other sessions running'
               ].map((item) => (
                 <li key={item} className="flex items-start gap-3 text-slate-600">
                   <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -118,8 +118,9 @@ export default function KillSwitchDocs() {
               <h3 className="font-semibold text-slate-900">Via Dashboard</h3>
             </div>
             <p className="text-slate-600 mb-4">
-              Go to <strong>Dashboard → Agents</strong>, find the agent you want to stop, and click the red 
-              <strong> Kill </strong> button. The agent will stop immediately.
+              Go to <strong>Dashboard → Agents</strong>, select the agent, click the red
+              <strong> Kill </strong> button on a running session and confirm. <strong>Kill All Sessions</strong> in
+              the agent&apos;s menu kills every pending or running session of that agent.
             </p>
             <div className="bg-slate-100 rounded-xl p-4 text-center text-slate-500">
               [Dashboard screenshot placeholder]
@@ -135,37 +136,28 @@ export default function KillSwitchDocs() {
               <h3 className="font-semibold text-slate-900">Via API</h3>
             </div>
             <p className="text-slate-600 mb-4">
-              Use the REST API to programmatically kill sessions:
+              Kill a session with an Oxy API key of the session&apos;s organization. There is no request body. A session of
+              another organization, an unknown id or a session that already ended gets 404:
             </p>
             <CodeBlock 
               language="bash"
               code={`# Kill a specific session
-curl -X DELETE \\
-  http://localhost:8000/v1/agents/{agent_id}/sessions/{session_id} \\
-  -H "Authorization: Bearer oxy_sk_..." \\
-  -H "Content-Type: application/json" \\
-  -d '{"reason": "Detected unauthorized file access"}'`}
+curl -X POST \\
+  http://localhost:8000/v1/agent-sessions/{session_id}/kill \\
+  -H "Authorization: Bearer oxy_live_..."`}
             />
             <div className="mt-4">
+              <p className="text-slate-600 mb-4">
+                The agent&apos;s own requests name the session. An agent or session id that is not a UUID gets 400;
+                one that belongs to another organization gets 403:
+              </p>
               <CodeBlock 
-                language="python"
-                code={`# Python SDK
-from oxy import OxyClient
-
-client = OxyClient(api_key="oxy_sk_...")
-
-# Kill a specific session
-client.agents.kill_session(
-    agent_id="agent_abc123",
-    session_id="sess_xyz789",
-    reason="Budget exceeded"
-)
-
-# Kill ALL sessions for an agent (emergency)
-client.agents.kill_all_sessions(
-    agent_id="agent_abc123",
-    reason="Security incident"
-)`}
+                language="bash"
+                code={`curl http://localhost:8000/v1/chat/completions \\
+  -H "Authorization: Bearer oxy_live_..." \\
+  -H "X-Oxy-Session-Id: {session_id}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"model": "gpt-4.1-mini", "messages": [{"role": "user", "content": "Hi"}]}'`}
               />
             </div>
           </div>
@@ -179,15 +171,14 @@ client.agents.kill_all_sessions(
           <div className="p-6">
             <CodeBlock 
               language="json"
-              code={`{
-  "success": true,
-  "killed": true,
-  "session_id": "sess_xyz789",
-  "reason": "Budget exceeded",
-  "latency": {
-    "kill_signal_ms": 0.8,
-    "total_ms": 4.2,
-    "guarantee": "low-latency kill signal (best-effort, no formal SLA)"
+              code={`// POST /v1/agent-sessions/{session_id}/kill → 200
+{"status": "ok"}
+
+// A later request with that X-Oxy-Session-Id → 410
+{
+  "error": {
+    "code": "session_terminated",
+    "message": "Agent session {session_id} has been terminated. Create a new session with POST /v1/agents/{agent_id}/sessions; do not retry with this session_id."
   }
 }`}
             />
@@ -200,10 +191,11 @@ client.agents.kill_all_sessions(
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
           <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
           <div>
-            <h3 className="font-semibold text-amber-800 mb-1">Fail-Open Design</h3>
+            <h3 className="font-semibold text-amber-800 mb-1">Fail-Closed Design</h3>
             <p className="text-sm text-amber-700">
-              If Oxy becomes unreachable, your requests bypass our proxy and go directly to your AI provider. 
-              Your production never stops because of us. The kill switch only works when Oxy is reachable.
+              If neither Redis nor Postgres can say whether a session was killed, the request is refused with
+              503 kill_switch_unavailable instead of being served. The kill switch only sees requests that go through
+              Oxy and carry the session&apos;s X-Oxy-Session-Id; calls made straight to a provider are out of its reach.
             </p>
           </div>
         </div>

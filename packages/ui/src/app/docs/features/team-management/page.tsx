@@ -51,25 +51,25 @@ const roles = [
     name: 'Owner',
     icon: Crown,
     color: 'bg-amber-100 text-amber-700',
-    permissions: ['All permissions', 'Delete organization', 'Transfer ownership', 'Manage billing'],
+    permissions: ['Invite, list and revoke invites (/management/team)', 'Delete agents', 'Everything an admin can do'],
   },
   {
     name: 'Admin',
     icon: Shield,
     color: 'bg-violet-100 text-violet-700',
-    permissions: ['Invite members', 'Manage projects', 'View all agents', 'Edit settings'],
+    permissions: ['Create and update agents', 'Reset agent budgets', 'Not offered by /management/team invites'],
   },
   {
     name: 'Developer',
     icon: Users,
     color: 'bg-blue-100 text-blue-700',
-    permissions: ['Create agents', 'Manage own projects', 'View logs', 'Use API'],
+    permissions: ['Default role of /management/team invites', 'No owner- or admin-only actions'],
   },
   {
     name: 'Viewer',
     icon: Eye,
     color: 'bg-slate-100 text-slate-700',
-    permissions: ['View dashboard', 'View logs (read-only)', 'View reports'],
+    permissions: ['Accepted as an invite role', 'Not a membership role: organization_members.role allows owner, admin and developer only'],
   },
 ]
 
@@ -129,19 +129,19 @@ export default function TeamManagementDocs() {
             <ol className="space-y-2 text-slate-600">
               <li className="flex items-start gap-3">
                 <div className="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center text-violet-700 font-bold text-xs shrink-0">1</div>
-                <span>Go to <strong>Settings → Team</strong></span>
+                <span>Open the <strong>Team</strong> page</span>
               </li>
               <li className="flex items-start gap-3">
                 <div className="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center text-violet-700 font-bold text-xs shrink-0">2</div>
-                <span>Click <strong>"Invite Member"</strong></span>
+                <span>Click <strong>&quot;Invite Member&quot;</strong></span>
               </li>
               <li className="flex items-start gap-3">
                 <div className="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center text-violet-700 font-bold text-xs shrink-0">3</div>
-                <span>Enter email and select role</span>
+                <span>Enter the email and a role (the API accepts developer or viewer)</span>
               </li>
               <li className="flex items-start gap-3">
                 <div className="w-6 h-6 rounded-full bg-violet-100 flex items-center justify-center text-violet-700 font-bold text-xs shrink-0">4</div>
-                <span>Teammate receives email with invite link</span>
+                <span>With EMAIL_ENABLED=true and RESEND_API_KEY set, the engine emails a link to SITE_URL/invite/&#123;token&#125;; otherwise no email is sent</span>
               </li>
             </ol>
           </div>
@@ -157,16 +157,16 @@ curl -X POST http://localhost:8000/management/team/invite \\
   -H "Authorization: Bearer <jwt_token>" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "email": "jane@company.com",
-    "role": "developer"
+    "email": "jane@example.com",
+    "role": "developer",
+    "organization_id": "<org uuid>"
   }'
 
-# Response
+# Response (caller must be the organization's owner, else 403)
 {
   "status": "invited",
-  "email": "jane@company.com",
-  "role": "developer",
-  "expires_at": "2025-01-22T10:00:00Z"
+  "email": "jane@example.com",
+  "expires_in_hours": 48
 }`}
             />
           </div>
@@ -191,11 +191,15 @@ curl -X POST http://localhost:8000/management/team/invite/accept \\
 # Response
 {
   "status": "accepted",
-  "organization_id": "org_abc123",
-  "organization_name": "Acme Corp",
-  "role": "developer"
+  "organization_id": "<org uuid>",
+  "organization_name": "Example Org"
 }`}
             />
+            <p className="text-xs text-slate-600 mt-4">
+              Not available in this release: the endpoint answers 501. It called fn_accept_team_invite, which
+              db/schema.sql does not define, so accepting failed; the dashboard no longer offers invitations.
+              An operator adds a member as a row in organization_members.
+            </p>
           </div>
         </GlassCard>
       </motion.div>
@@ -207,27 +211,31 @@ curl -X POST http://localhost:8000/management/team/invite/accept \\
             <h2 className="text-xl font-bold text-slate-900 mb-4">Manage Invites</h2>
             <CodeBlock 
               language="bash"
-              code={`# List pending invites
-curl http://localhost:8000/management/team/invites \\
+              code={`# List invites (all statuses, newest first; owner only)
+curl "http://localhost:8000/management/team/invites?organization_id=<org uuid>" \\
   -H "Authorization: Bearer <jwt_token>"
 
 # Response
-{
-  "invites": [
-    {
-      "id": "inv_123",
-      "email": "jane@company.com",
-      "role": "developer",
-      "status": "pending",
-      "invited_at": "2025-01-15T10:00:00Z",
-      "expires_at": "2025-01-22T10:00:00Z"
-    }
-  ]
-}
+[
+  {
+    "id": "<invite uuid>",
+    "email": "jane@example.com",
+    "role": "developer",
+    "created_at": "2026-01-15T10:00:00+00:00",
+    "expires_at": "2026-01-17T10:00:00+00:00",
+    "status": "pending"
+  }
+]
 
-# Revoke invite
-curl -X DELETE http://localhost:8000/management/team/invite/inv_123 \\
-  -H "Authorization: Bearer <jwt_token>"`}
+# Revoke invite (owner only) -> {"status": "revoked"}
+curl -X DELETE http://localhost:8000/management/team/invite/<invite uuid> \\
+  -H "Authorization: Bearer <jwt_token>"
+
+# Same with an Oxy API key (Bearer oxy_live_...), no role check:
+# GET    /v1/team                      -> {"members": [...], "invites": [...]}
+# POST   /v1/team/invites              {"email", "role"} -> the invite row; no email is sent
+#        (role developer or viewer: the default member, and admin, fail the database check with 500)
+# DELETE /v1/team/invites/{invite_id}  -> {"status": "ok"}`}
             />
           </div>
         </GlassCard>
@@ -237,41 +245,39 @@ curl -X DELETE http://localhost:8000/management/team/invite/inv_123 \\
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
         <GlassCard>
           <div className="p-6">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">Team Size by Plan Tier</h2>
+            <h2 className="text-xl font-bold text-slate-900 mb-4">Team-Member Caps by Plan Tier</h2>
+            <p className="text-sm text-slate-600 mb-4">
+              The tier is set on the organization in the database. These caps are defined in PLAN_LIMITS
+              (packages/engine/routes/billing.py), but the invite endpoints in this build do not check them.
+            </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200">
-                    <th className="text-left py-2 text-slate-600">Plan</th>
-                    <th className="text-center py-2 text-slate-600">Team Members</th>
-                    <th className="text-center py-2 text-slate-600">Roles Available</th>
+                    <th className="text-left py-2 text-slate-600">Plan tier</th>
+                    <th className="text-center py-2 text-slate-600">Team members</th>
                   </tr>
                 </thead>
                 <tbody className="text-slate-700">
                   <tr className="border-b border-slate-100">
-                    <td className="py-2 font-medium">Free</td>
+                    <td className="py-2 font-medium">free</td>
                     <td className="py-2 text-center">1</td>
-                    <td className="py-2 text-center">Owner only</td>
                   </tr>
                   <tr className="border-b border-slate-100">
-                    <td className="py-2 font-medium">Starter</td>
+                    <td className="py-2 font-medium">starter</td>
                     <td className="py-2 text-center">3</td>
-                    <td className="py-2 text-center">All roles</td>
                   </tr>
                   <tr className="border-b border-slate-100">
-                    <td className="py-2 font-medium">Growth</td>
+                    <td className="py-2 font-medium">growth</td>
                     <td className="py-2 text-center">10</td>
-                    <td className="py-2 text-center">All roles</td>
                   </tr>
                   <tr className="border-b border-slate-100">
-                    <td className="py-2 font-medium">Business</td>
+                    <td className="py-2 font-medium">business</td>
                     <td className="py-2 text-center">50</td>
-                    <td className="py-2 text-center">All roles</td>
                   </tr>
                   <tr>
-                    <td className="py-2 font-medium">Enterprise</td>
-                    <td className="py-2 text-center">Unlimited</td>
-                    <td className="py-2 text-center">All roles + SSO</td>
+                    <td className="py-2 font-medium">enterprise</td>
+                    <td className="py-2 text-center">No cap</td>
                   </tr>
                 </tbody>
               </table>
@@ -290,19 +296,19 @@ curl -X DELETE http://localhost:8000/management/team/invite/inv_123 \\
           <ul className="space-y-2 text-sm text-violet-700">
             <li className="flex items-start gap-2">
               <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-              <span><strong>Invite links expire</strong> after 7 days</span>
+              <span><strong>Invites carry expires_at</strong> 48 hours after creation</span>
             </li>
             <li className="flex items-start gap-2">
               <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-              <span><strong>Only owners</strong> can invite members and manage billing</span>
+              <span><strong>Only owners</strong> can invite, list and revoke through /management/team; /v1/team accepts any API key of the organization</span>
             </li>
             <li className="flex items-start gap-2">
               <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-              <span><strong>All invites are logged</strong> in the audit trail</span>
+              <span><strong>Tokens are stored hashed:</strong> only the SHA-256 of the invite token is saved</span>
             </li>
             <li className="flex items-start gap-2">
               <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-              <span><strong>Use SSO</strong> on Business+ plans for centralized access control</span>
+              <span><strong>Audit log:</strong> /v1/team invite creation and revocation are recorded as team.invite.created and team.invite.revoked; /management/team writes only to the engine log</span>
             </li>
           </ul>
         </div>

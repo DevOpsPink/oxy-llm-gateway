@@ -66,22 +66,12 @@ export default function BillingPage() {
   }
 
   const renderUsage = () => {
-    if (!data || data.plan !== 'free') return null
+    if (!data) return null
     const used = data.free_plan_usage_this_month || 0
-    const limit = data.free_plan_limit_per_month || 100000
-    const pct = Math.min(100, Math.round((used / limit) * 100))
     return (
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">Free plan request quota this month.</p>
-          <p className="text-sm font-medium">
-            {used.toLocaleString()} / {limit.toLocaleString()}
-          </p>
-        </div>
-        <Progress value={pct} className="h-2" />
-        {data.next_reset_at && (
-          <p className="text-xs text-muted-foreground">Resets on {new Date(data.next_reset_at).toUTCString()}</p>
-        )}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Requests this month (no quota; budgets cap spend).</p>
+        <p className="text-sm font-medium">{used.toLocaleString()}</p>
       </div>
     )
   }

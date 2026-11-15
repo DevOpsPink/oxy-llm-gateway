@@ -676,16 +676,10 @@ async def kill_session(
     organization_id = auth["organization_id"]
     user_id = auth["user_id"]
     
-    # CRITICAL: Publish kill signal to Redis FIRST (instant rejection of in-flight)
-    # Fast-path design goal: Redis SET is typically sub-ms in internal tests (no SLA)
-    try:
-        await mark_session_terminated(session_id)
-    except Exception as e:
-        log.error("kill_signal_redis_failed", session_id=session_id, error=str(e)[:100])
-    
-    redis_latency_ms = (time.perf_counter() - start_time) * 1000
-    
-    # Update session in database (can be slower, kill signal already sent)
+    # The database row first, scoped to this organization and agent: a session id
+    # from another organization matches nothing and gets no kill flag. (The flag
+    # used to be set before this check, so anyone signed in could stop another
+    # organization's session for an hour by its id.)
     result = await resources.supabase.table("agent_sessions").update({
         "status": "killed",
         "kill_requested_at": datetime.now(timezone.utc).isoformat(),
@@ -696,13 +690,20 @@ async def kill_session(
         "organization_id", organization_id
     ).in_("status", ["pending", "running"]).execute()
     
-    total_latency_ms = (time.perf_counter() - start_time) * 1000
-    
     if not result.data:
         raise HTTPException(
             status_code=404, 
             detail="Session not found or already ended"
         )
+    
+    # Then the Redis flag, which the gateway reads first on every request.
+    flag_start = time.perf_counter()
+    try:
+        await mark_session_terminated(session_id)
+    except Exception as e:
+        log.error("kill_signal_redis_failed", session_id=session_id, error=str(e)[:100])
+    redis_latency_ms = (time.perf_counter() - flag_start) * 1000
+    total_latency_ms = (time.perf_counter() - start_time) * 1000
     
     log.warning("agent_session_killed",
                agent_id=agent_id,

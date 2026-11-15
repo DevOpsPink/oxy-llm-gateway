@@ -9,9 +9,9 @@ from dependencies import CacheData, build_api_key_dependency, get_supabase_heade
 from routes.usage import get_org_monthly_usage, current_month_slug
 
 router = APIRouter(prefix="/v1", tags=["billing"])
-api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key)
+# The dashboard calls these routes with its session; scripts with an Oxy API key.
+api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key, allow_session=True)
 
-FREE_PLAN_LIMIT = 100_000
 
 
 def _next_month_reset() -> str:
@@ -87,7 +87,7 @@ async def billing_overview(
 
         payload = {
             "plan": plan,
-            "free_plan_limit_per_month": FREE_PLAN_LIMIT if plan == "free" else None,
+            "free_plan_limit_per_month": None,  # no monthly request quota on any tier
             "free_plan_usage_this_month": usage if plan == "free" else None,
             "referral_code": referral_code,
             "referral_credits_usd": float(credits),

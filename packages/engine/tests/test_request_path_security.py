@@ -365,3 +365,123 @@ async def test_concurrent_reservations_never_pass_the_budget(env):
     ])
     assert sum(1 for r in results if r["status"] == "OK") == 5
     assert Decimal(await env.get("project_spend:" + PROJECT)) <= Decimal("0.05")
+
+
+# ----------------------------------------------------------------------------- kill through the agents route
+class _SessionsTable:
+    """agent_sessions with update().eq()...in_().execute(), as the engine's client chains it."""
+
+    def __init__(self, rows):
+        self.rows, self._filters, self._update = rows, [], None
+
+    def update(self, data):
+        self._update, self._filters = data, []
+        return self
+
+    def eq(self, col, val):
+        self._filters.append((col, [val]))
+        return self
+
+    def in_(self, col, vals):
+        self._filters.append((col, list(vals)))
+        return self
+
+    async def execute(self):
+        hit = [r for r in self.rows if all(r.get(c) in vs for c, vs in self._filters)]
+        for r in hit:
+            r.update(self._update)
+        return type("R", (), {"data": hit})
+
+
+class _Supabase:
+    def __init__(self, rows):
+        self.sessions = _SessionsTable(rows)
+
+    def table(self, name):
+        assert name == "agent_sessions"
+        return self.sessions
+
+
+@pytest.mark.asyncio
+async def test_agents_route_cannot_kill_another_organizations_session(env):
+    """The kill flag used to be set before the organization check."""
+    from fastapi import HTTPException
+    from routes.agents import SessionKill, kill_session
+    rows = [{"id": SESSION, "agent_id": AGENT, "organization_id": ORG, "status": "running"}]
+    resources.supabase = _Supabase(rows)
+    with pytest.raises(HTTPException) as exc:
+        await kill_session(AGENT, SESSION, SessionKill(), auth={"organization_id": OTHER_ORG, "user_id": "u2"})
+    assert exc.value.status_code == 404
+    assert not await env.exists("oxy:session:%s:terminated" % SESSION)
+    assert rows[0]["status"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_agents_route_kills_its_own_session(env):
+    from routes.agents import SessionKill, kill_session
+    rows = [{"id": SESSION, "agent_id": AGENT, "organization_id": ORG, "status": "running"}]
+    resources.supabase = _Supabase(rows)
+    out = await kill_session(AGENT, SESSION, SessionKill(), auth={"organization_id": ORG, "user_id": "u1"})
+    assert out["killed"] is True and rows[0]["status"] == "killed"
+    assert await env.exists("oxy:session:%s:terminated" % SESSION)
+
+
+# ----------------------------------------------------------------------------- response cache per organization
+@pytest.mark.asyncio
+async def test_response_cache_is_never_shared_between_organizations(env):
+    """The cache key used to leave the organization out: one tenant got another's answer."""
+    from core.response_cache import ResponseCache
+    cache = ResponseCache(env)
+    messages = [{"role": "user", "content": "the same deterministic question"}]
+    params = {"temperature": 0}
+    await cache.set_cached_response("openai", "gpt-4o-mini", messages, params,
+                                    {"choices": [{"message": {"content": "org one's answer"}}]}, 0.001, scope=ORG)
+    assert await cache.get_cached_response("openai", "gpt-4o-mini", messages, params, scope=ORG) is not None
+    assert await cache.get_cached_response("openai", "gpt-4o-mini", messages, params, scope=OTHER_ORG) is None
+
+
+# ----------------------------------------------------------------------------- the dashboard's session on /v1 routes
+JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1MSJ9.c2ln"
+
+
+@pytest.mark.asyncio
+async def test_dashboard_session_resolves_to_its_organization(env, monkeypatch):
+    import dependencies as d
+
+    async def user(_creds):
+        return {"id": "u1"}
+
+    monkeypatch.setattr(d, "get_current_user", user)
+    resources.http_client = FakeHttp({"organization_members": [{"organization_id": ORG, "role": "developer"}],
+                                      "projects": [{"id": PROJECT, "budget_limit": "2.00"}]})
+    dep = d.build_api_key_dependency(lambda: d.get_user_and_key_from_api_key, allow_session=True)
+    ctx = await dep(HTTPAuthorizationCredentials(scheme="Bearer", credentials=JWT))
+    assert (ctx["organization_id"], ctx["project_id"], ctx["user_id"]) == (ORG, PROJECT, "u1")
+
+
+@pytest.mark.asyncio
+async def test_session_without_membership_is_refused(env, monkeypatch):
+    from fastapi import HTTPException
+    import dependencies as d
+
+    async def user(_creds):
+        return {"id": "u9"}
+
+    monkeypatch.setattr(d, "get_current_user", user)
+    resources.http_client = FakeHttp({"organization_members": []})
+    dep = d.build_api_key_dependency(lambda: d.get_user_and_key_from_api_key, allow_session=True)
+    with pytest.raises(HTTPException) as exc:
+        await dep(HTTPAuthorizationCredentials(scheme="Bearer", credentials=JWT))
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_gateway_routes_still_take_keys_only(env):
+    """Without allow_session (the gateway, /v1/api-keys) a session is not a key."""
+    from fastapi import HTTPException
+    import dependencies as d
+    resources.http_client = FakeHttp()
+    dep = d.build_api_key_dependency(lambda: d.get_user_and_key_from_api_key)
+    with pytest.raises(HTTPException) as exc:
+        await dep(HTTPAuthorizationCredentials(scheme="Bearer", credentials=JWT))
+    assert exc.value.status_code == 401

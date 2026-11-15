@@ -8,7 +8,8 @@ from core import resources, SUPABASE_URL, log
 from dependencies import CacheData, build_api_key_dependency, get_user_and_key_from_api_key, get_supabase_headers
 
 router = APIRouter(prefix="/v1", tags=["attribution"])
-api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key)
+# The dashboard calls these routes with its session; scripts with an Oxy API key.
+api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key, allow_session=True)
 
 DEFAULT_LIMIT = 20
 MAX_LIMIT = 100

@@ -3,12 +3,15 @@
 /**
  * 📚 PROMPT LIBRARY DOCUMENTATION
  * ================================
+ *
+ * Source: routes/prompts_v1.py (/v1/prompts), routes/prompts.py (legacy /prompts),
+ * db/schema.sql (prompts table)
  */
 
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { 
-  BookOpen, Search, Star, Download, CheckCircle2, 
+import {
+  BookOpen, Search, Star, Key, CheckCircle2,
   ArrowRight, Copy, Upload, Users, Sparkles
 } from 'lucide-react'
 import { useState } from 'react'
@@ -30,7 +33,7 @@ function CodeBlock({ code, language = 'python' }: { code: string; language?: str
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-  
+
   return (
     <div className="relative group">
       <div className="absolute top-3 left-4 text-xs text-slate-500 font-mono">{language}</div>
@@ -55,24 +58,24 @@ export default function PromptLibraryDocs() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Prompt Library</h1>
-            <p className="text-slate-500">A large library of tested prompts. Save hours of prompt engineering.</p>
+            <p className="text-slate-500">Prompts stored in this deployment&apos;s database: your organization&apos;s own, plus any an operator has marked verified.</p>
           </div>
         </div>
       </motion.div>
 
-      {/* Stats */}
+      {/* Facts */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { icon: BookOpen, label: 'Prompts', value: 'Large library', color: 'text-teal-600' },
-            { icon: Star, label: 'Verified', value: '200+', color: 'text-amber-600' },
-            { icon: Users, label: 'Contributors', value: '50+', color: 'text-violet-600' },
-            { icon: Download, label: 'Downloads', value: '10k+', color: 'text-emerald-600' },
+            { icon: BookOpen, label: 'Endpoint', value: '/v1/prompts/', color: 'text-teal-600' },
+            { icon: Key, label: 'Auth', value: 'oxy_live_ key', color: 'text-violet-600' },
+            { icon: Users, label: 'You see', value: 'Org + verified', color: 'text-emerald-600' },
+            { icon: Star, label: 'Page size', value: '20 (max 100)', color: 'text-amber-600' },
           ].map((stat) => (
             <GlassCard key={stat.label}>
               <div className="p-4 text-center">
                 <stat.icon className={`h-5 w-5 mx-auto mb-2 ${stat.color}`} />
-                <div className={`text-xl font-bold ${stat.color}`}>{stat.value}</div>
+                <div className={`text-sm font-bold ${stat.color}`}>{stat.value}</div>
                 <div className="text-xs text-slate-500">{stat.label}</div>
               </div>
             </GlassCard>
@@ -85,21 +88,22 @@ export default function PromptLibraryDocs() {
         <GlassCard>
           <div className="p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-4">Categories</h2>
+            <p className="text-sm text-slate-600 mb-4">
+              You do not set a category directly. It is taken from your first tag: the first category below whose
+              keyword appears inside that tag wins, otherwise <code className="bg-slate-100 px-1 rounded">other</code>.
+            </p>
             <div className="grid sm:grid-cols-2 gap-3">
               {[
-                { name: 'Customer Support', count: 85, desc: 'Ticket classification, response generation' },
-                { name: 'Code Generation', count: 120, desc: 'Functions, tests, documentation' },
-                { name: 'Data Analysis', count: 65, desc: 'SQL queries, insights extraction' },
-                { name: 'Content Writing', count: 95, desc: 'Blog posts, emails, marketing copy' },
-                { name: 'Translation', count: 40, desc: 'Multi-language support' },
-                { name: 'Summarization', count: 75, desc: 'Documents, meetings, reports' },
+                { name: 'customer_support', keys: 'support, customer, cs' },
+                { name: 'code_generation', keys: 'code, coding, dev, engineering' },
+                { name: 'data_analysis', keys: 'data, analysis, analytics' },
+                { name: 'content_writing', keys: 'content, writing, blog, copy' },
+                { name: 'translation', keys: 'translate, translation' },
+                { name: 'summarization', keys: 'summary, summarize, summarization' },
               ].map((cat) => (
-                <div key={cat.name} className="p-3 bg-slate-50 rounded-xl hover:bg-slate-100 cursor-pointer transition-colors">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-slate-900">{cat.name}</span>
-                    <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">{cat.count}</span>
-                  </div>
-                  <p className="text-xs text-slate-500">{cat.desc}</p>
+                <div key={cat.name} className="p-3 bg-slate-50 rounded-xl">
+                  <div className="font-medium text-slate-900 mb-1"><code>{cat.name}</code></div>
+                  <p className="text-xs text-slate-500">Keywords: {cat.keys}</p>
                 </div>
               ))}
             </div>
@@ -109,25 +113,31 @@ export default function PromptLibraryDocs() {
 
       {/* Browse prompts */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">Browse Prompts</h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+          <Search className="h-5 w-5 text-teal-600" /> Browse Prompts
+        </h2>
         <GlassCard>
           <div className="p-6">
             <p className="text-slate-600 mb-4">
-              Search and browse prompts via API:
+              The list holds prompts written by active members of your organization and verified prompts from anyone
+              on the deployment, ordered by <code className="bg-slate-100 px-1 rounded">usage_count</code>.
             </p>
-            <CodeBlock 
+            <CodeBlock
               language="bash"
-              code={`# List all prompts
-curl http://localhost:8000/prompts \\
-  -H "Authorization: Bearer oxy_sk_..."
+              code={`# List prompts (default 20, max 100)
+curl "http://localhost:8000/v1/prompts/?limit=50" \\
+  -H "Authorization: Bearer oxy_live_..."
 
-# Search by category
-curl "http://localhost:8000/prompts?category=customer_support" \\
-  -H "Authorization: Bearer oxy_sk_..."
+# Filter by category (the parameter is called tag)
+curl "http://localhost:8000/v1/prompts/?tag=customer_support" \\
+  -H "Authorization: Bearer oxy_live_..."
 
-# Search by keyword
-curl "http://localhost:8000/prompts?search=email+response" \\
-  -H "Authorization: Bearer oxy_sk_..."`}
+# Search title, description and prompt text
+curl "http://localhost:8000/v1/prompts/?search=email" \\
+  -H "Authorization: Bearer oxy_live_..."
+
+# Response
+{ "items": [ { "id": "...", "title": "...", "prompt_text": "...", "category": "...", "tags": [...], "is_verified": false, ... } ] }`}
             />
           </div>
         </GlassCard>
@@ -139,28 +149,29 @@ curl "http://localhost:8000/prompts?search=email+response" \\
           <div className="p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-4">Use a Prompt</h2>
             <p className="text-slate-600 mb-4">
-              Get a prompt by ID and use it with variables:
+              <code className="bg-slate-100 px-1 rounded">GET /v1/prompts/{'{id}'}</code> returns one prompt (404 if it does not
+              exist, 403 if it is neither verified nor written by your organization). Oxy does not fill in placeholders;
+              replace them in your own code.
             </p>
-            <CodeBlock 
+            <CodeBlock
               language="python"
-              code={`# Get prompt template
-prompt = client.get("/prompts/support-ticket-response")
+              code={`import httpx
+from openai import OpenAI
 
-# Template: "You are a customer support agent for {{company}}.
-#            The customer says: {{ticket_content}}
-#            Respond professionally and helpfully."
+OXY_KEY = "oxy_live_..."
 
-# Use with variables
+prompt = httpx.get(
+    "http://localhost:8000/v1/prompts/<prompt id>",
+    headers={"Authorization": f"Bearer {OXY_KEY}"},
+).json()
+
+client = OpenAI(api_key=OXY_KEY, base_url="http://localhost:8000/v1")
 response = client.chat.completions.create(
-    model="gpt-4",
-    messages=[{
-        "role": "system",
-        "content": prompt["prompt_text"].replace(
-            "{{company}}", "Acme Corp"
-        ).replace(
-            "{{ticket_content}}", customer_ticket
-        )
-    }]
+    model="gpt-4o",
+    messages=[
+        {"role": "system", "content": prompt["prompt_text"].replace("{company}", "Acme Corp")},
+        {"role": "user", "content": customer_ticket},
+    ],
 )`}
             />
           </div>
@@ -173,29 +184,27 @@ response = client.chat.completions.create(
           <div className="p-6">
             <div className="flex items-center gap-3 mb-4">
               <Upload className="h-6 w-6 text-violet-600" />
-              <h2 className="text-xl font-bold text-slate-900">Submit Your Prompt</h2>
+              <h2 className="text-xl font-bold text-slate-900">Add, Edit and Delete Prompts</h2>
             </div>
-            <p className="text-slate-600 mb-4">
-              Share your best prompts with the community:
-            </p>
-            <CodeBlock 
+            <CodeBlock
               language="bash"
-              code={`curl -X POST http://localhost:8000/prompts \\
-  -H "Authorization: Bearer oxy_sk_..." \\
+              code={`curl -X POST http://localhost:8000/v1/prompts/ \\
+  -H "Authorization: Bearer oxy_live_..." \\
   -H "Content-Type: application/json" \\
   -d '{
-    "title": "Sales Email Generator",
-    "description": "Generates personalized sales emails",
-    "category": "content_writing",
-    "prompt_text": "You are a sales representative for {{company}}...",
-    "variables": ["company", "prospect_name", "product"],
-    "example_output": "Hi {{prospect_name}}, I noticed..."
-  }'`}
+    "name": "Support email reply",
+    "description": "Drafts a reply to a customer email",
+    "content": "You are a support agent for {company}. Reply politely to the email below.",
+    "tags": ["support", "email"]
+  }'
+
+# 201 Created, returns the stored prompt`}
             />
-            <p className="text-sm text-slate-500 mt-4">
-              Submitted prompts are reviewed before publishing (is_verified is set by an
-              admin of the deployment).
-            </p>
+            <ul className="text-sm text-slate-600 space-y-1 mt-4">
+              <li>• The database requires a name of 10 to 100 characters, a description of 20 to 500 (a default text is used if you omit it) and content of 50 to 10,000. A request that passes the API&apos;s looser checks but breaks these fails with 500 &quot;Failed to create prompt&quot;.</li>
+              <li>• New prompts are stored with <code className="bg-slate-100 px-1 rounded">is_verified: false</code> and <code className="bg-slate-100 px-1 rounded">recommended_model: &quot;gpt-4.1-mini&quot;</code>; tags are returned as <code className="bg-slate-100 px-1 rounded">tags</code>.</li>
+              <li>• <code className="bg-slate-100 px-1 rounded">PATCH /v1/prompts/{'{id}'}</code> (name, description, content, tags) and <code className="bg-slate-100 px-1 rounded">DELETE /v1/prompts/{'{id}'}</code> (204) work only on prompts written by a member of your organization; otherwise 403.</li>
+            </ul>
           </div>
         </GlassCard>
       </motion.div>
@@ -207,9 +216,10 @@ response = client.chat.completions.create(
           <div>
             <h3 className="font-semibold text-amber-800 mb-1">Verified Prompts</h3>
             <p className="text-sm text-amber-700">
-              Prompts with the <span className="bg-amber-200 px-1.5 py-0.5 rounded text-xs font-medium">✓ Verified</span> badge 
-              have been reviewed by an admin of this deployment for quality and safety.
-              Starting with verified prompts is recommended.
+              No API sets <code>is_verified</code>. An operator sets it in the <code>prompts</code> table, and a verified
+              prompt becomes visible to every organization on the deployment. The table also has leftover columns
+              (<code>is_premium</code>, <code>price_usd</code>, ratings); they have no effect. The older{' '}
+              <code>/prompts</code> router (without <code>/v1</code>) serves two built-in sample prompts and saves nothing.
             </p>
           </div>
         </div>
@@ -229,4 +239,3 @@ response = client.chat.completions.create(
     </div>
   )
 }
-

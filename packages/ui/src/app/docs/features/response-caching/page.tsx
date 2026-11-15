@@ -55,7 +55,7 @@ export default function ResponseCachingDocs() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Response Caching</h1>
-            <p className="text-slate-500">Reduce costs on repeated, identical AI requests</p>
+            <p className="text-slate-500">Serve repeated identical requests from Redis without a provider call</p>
           </div>
         </div>
       </motion.div>
@@ -64,9 +64,9 @@ export default function ResponseCachingDocs() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <div className="grid grid-cols-3 gap-4">
           {[
-            { icon: TrendingDown, label: 'Typical Impact', value: 'Lower cost on repeats', color: 'text-emerald-600' },
-            { icon: Clock, label: 'Cache TTL', value: 'Configurable', color: 'text-violet-600' },
-            { icon: DollarSign, label: 'When it applies', value: 'Identical prompt/model/temp requests', color: 'text-amber-600' },
+            { icon: TrendingDown, label: 'On a hit', value: 'No provider call', color: 'text-emerald-600' },
+            { icon: Clock, label: 'Cache TTL', value: '7 days (fixed)', color: 'text-violet-600' },
+            { icon: DollarSign, label: 'When it applies', value: 'temperature 0, non-streaming', color: 'text-amber-600' },
           ].map((stat) => (
             <GlassCard key={stat.label}>
               <div className="p-4 text-center">
@@ -85,15 +85,16 @@ export default function ResponseCachingDocs() {
           <div className="p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-4">How It Works</h2>
             <p className="text-slate-600 mb-4">
-              Oxy automatically caches responses for identical requests. When you send the same prompt 
-              to the same model with the same parameters, we return the cached response instead of 
-              calling the AI provider again.
+              Oxy stores the response of a non-streaming request sent with temperature 0 in Redis. An identical
+              request later gets the stored response instead of a new provider call. The cache is shared: its key
+              does not include the organization, project or API key, so identical requests from different
+              organizations get the same entry.
             </p>
             
             <div className="bg-slate-50 rounded-xl p-4 mb-4">
               <div className="text-sm font-mono text-slate-600">
                 <div className="mb-2"><span className="text-violet-600">Cache Key</span> = SHA-256(</div>
-                <div className="ml-4">provider + model + system_prompt + user_prompt + temperature + max_tokens</div>
+                <div className="ml-4">provider + model + messages + every other body field except stream, user, metadata, timeout</div>
                 <div>)</div>
               </div>
             </div>
@@ -101,10 +102,10 @@ export default function ResponseCachingDocs() {
             <h3 className="font-semibold text-slate-900 mb-2">When caching applies:</h3>
             <ul className="space-y-2">
               {[
-                'Deterministic requests (temperature = 0)',
-                'Non-streaming requests',
-                'Same model and provider',
-                'Identical prompt content'
+                'temperature is set to 0 (a request without temperature is not cached)',
+                'stream is not true',
+                'The model name does not contain dall-e, whisper, tts or vision',
+                'Provider, model, messages and the other body fields match exactly'
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2 text-slate-600">
                   <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -122,12 +123,13 @@ export default function ResponseCachingDocs() {
         <GlassCard>
           <div className="p-6">
             <p className="text-slate-600 mb-4">
-              No code changes needed! Caching works automatically. Just use temperature=0 for 
-              deterministic responses:
+              Caching needs no setup: send temperature=0 on a non-streaming request. A hit is still recorded in
+              request_logs (cache_hit = true) with the cost computed from the stored token usage, and the project&apos;s
+              budget is settled at that cost:
             </p>
             <CodeBlock 
               language="python"
-              code={`# This request will be cached automatically
+              code={`# Cacheable: temperature=0, not streaming
 response = client.chat.completions.create(
     model="gpt-4",
     messages=[
@@ -137,7 +139,7 @@ response = client.chat.completions.create(
     temperature=0  # ← Deterministic = cacheable
 )
 
-# Second identical request → served from cache (free!)
+# Second identical request → served from the cache, no provider call
 response2 = client.chat.completions.create(
     model="gpt-4",
     messages=[
@@ -146,7 +148,7 @@ response2 = client.chat.completions.create(
     ],
     temperature=0
 )
-# response2 is identical to response, but cost $0`}
+# response2 has the same body as response; Oxy records the same token cost`}
             />
           </div>
         </GlassCard>
@@ -158,13 +160,11 @@ response2 = client.chat.completions.create(
         <GlassCard>
           <div className="p-6">
             <p className="text-slate-600 mb-4">
-              Check response headers to see if a response was cached:
+              A response served from the cache carries one header; a miss carries none:
             </p>
             <CodeBlock 
               language="http"
-              code={`X-Oxy-Cache: HIT          # Response served from cache
-X-Oxy-Cache: MISS         # Response from AI provider (now cached)
-X-Oxy-Cache-TTL: 604800   # Seconds until expiry (7 days)`}
+              code={`X-Oxy-Cache: hit          # Response served from the cache`}
             />
           </div>
         </GlassCard>
@@ -175,10 +175,11 @@ X-Oxy-Cache-TTL: 604800   # Seconds until expiry (7 days)`}
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <h3 className="font-semibold text-amber-800 mb-2">When Caching Does NOT Apply</h3>
           <ul className="space-y-2 text-sm text-amber-700">
-            <li>• <strong>Creative requests:</strong> temperature &gt; 0 (responses should vary)</li>
-            <li>• <strong>Streaming:</strong> stream=true (can't cache partial responses)</li>
-            <li>• <strong>Tool calls:</strong> Function calls that depend on real-time data</li>
-            <li>• <strong>Different parameters:</strong> Any change to model, max_tokens, etc.</li>
+            <li>• <strong>Non-zero or missing temperature:</strong> the request goes to the provider and is not stored</li>
+            <li>• <strong>Streaming:</strong> stream=true is neither read from nor written to the cache</li>
+            <li>• <strong>Image and audio models:</strong> model names containing dall-e, whisper, tts or vision</li>
+            <li>• <strong>Different parameters:</strong> any change to model, messages, max_tokens or another body field gives a different key</li>
+            <li>• <strong>Checks still run first:</strong> agent and kill-switch checks, DLP and the budget reservation happen before the cache lookup</li>
           </ul>
         </div>
       </motion.div>
@@ -187,20 +188,19 @@ X-Oxy-Cache-TTL: 604800   # Seconds until expiry (7 days)`}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
         <GlassCard>
           <div className="p-6">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">Disable Caching</h2>
+            <h2 className="text-xl font-bold text-slate-900 mb-4">Skipping the Cache</h2>
             <p className="text-slate-600 mb-4">
-              If you need fresh responses every time, add the no-cache header:
+              There is no header or setting to bypass the cache, and the TTL is a constant
+              (RESPONSE_CACHE_TTL in packages/engine/core/response_cache.py). For a fresh response, send a request that is
+              not cacheable, for example without temperature 0:
             </p>
             <CodeBlock 
               language="python"
-              code={`# Force fresh response (skip cache)
+              code={`# Not cacheable: temperature is not 0
 response = client.chat.completions.create(
     model="gpt-4",
     messages=[...],
-    temperature=0,
-    extra_headers={
-        "X-Oxy-Cache-Control": "no-cache"
-    }
+    temperature=0.2
 )`}
             />
           </div>

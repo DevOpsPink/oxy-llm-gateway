@@ -156,11 +156,11 @@ async def preload_plan_limits() -> None:
     try:
         # Keep in sync with billing.py PLAN_LIMITS
         plan_limits = {
-            "free": {"requests": 100000, "projects": 1, "agents": 3, "team_members": 1},
-            "starter": {"requests": 500000, "projects": 5, "agents": 10, "team_members": 3},
-            "growth": {"requests": 2000000, "projects": 20, "agents": 50, "team_members": 10},
-            "business": {"requests": 10000000, "projects": None, "agents": None, "team_members": 50},
-            "enterprise": {"requests": None, "projects": None, "agents": None, "team_members": None}
+            "free": {"projects": 1, "agents": 3, "team_members": 1},
+            "starter": {"projects": 5, "agents": 10, "team_members": 3},
+            "growth": {"projects": 20, "agents": 50, "team_members": 10},
+            "business": {"projects": None, "agents": None, "team_members": 50},
+            "enterprise": {"projects": None, "agents": None, "team_members": None}
         }
         
         await resources.redis.setex(

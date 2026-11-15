@@ -69,8 +69,7 @@ export default function KeyRotationDocs() {
               {[
                 'Reduce blast radius if a key is compromised',
                 'Stay aligned with common audit expectations (e.g., 90-day hygiene)',
-                'Encourage fresh credentials across teams and services',
-                'Create a visible trail of key age and nudges'
+                'Encourage fresh credentials across teams and services'
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2 text-slate-600">
                   <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -87,6 +86,10 @@ export default function KeyRotationDocs() {
         <GlassCard>
           <div className="p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-4">How It Works (env-managed)</h2>
+            <p className="text-sm text-slate-600 mb-4">
+              The middleware looks at requests to /v1/* that carry an Oxy key (Bearer oxy_...). Key age counts from
+              the key&apos;s last_rotated_at, or created_at when that is empty.
+            </p>
             <div className="space-y-4">
               {[
                 { day: 'Fresh', title: 'Under warning threshold', desc: 'Pass-through, no headers.' },
@@ -112,18 +115,25 @@ export default function KeyRotationDocs() {
         <GlassCard>
           <div className="p-6">
                 <p className="text-slate-600 mb-4">
-                  Set warning/enforce thresholds per deployment. Oxy does not auto-rotate keys; you own the rotation.
+                  Set warning/enforce thresholds per deployment. Oxy does not auto-rotate keys; you own the rotation:
+                  create a new key with POST /v1/api-keys, then revoke the old one with DELETE /v1/api-keys/&#123;key_id&#125;.
                 </p>
             <CodeBlock 
                   language="bash"
                   code={`KEY_ROTATION_MODE=warn        # off|warn|enforce (default warn)
-KEY_ROTATION_WARNING_DAYS=80
-KEY_ROTATION_MAX_DAYS=90
+KEY_ROTATION_WARNING_DAYS=80  # default 80
+KEY_ROTATION_MAX_DAYS=90      # default 90
 # Headers when warning/expired:
-# X-Oxy-Key-Rotation-Status, X-Oxy-Key-Age-Days, X-Oxy-Key-Expires-In-Days, X-Oxy-Key-Rotation-URL`}
+# X-Oxy-Key-Rotation-Status, X-Oxy-Key-Age-Days, X-Oxy-Key-Expires-In-Days,
+# X-Oxy-Key-Rotation-URL (SITE_URL + /dashboard/api-keys)`}
             />
                 <p className="text-sm text-slate-500 mt-4">
-                  <strong>Enforcement is opt-in:</strong> set MODE=enforce to block at max_days. Defaults warn-only.
+                  <strong>Enforcement is opt-in:</strong> set KEY_ROTATION_MODE=enforce to block at max_days. Defaults warn-only.
+                </p>
+                <p className="text-sm text-slate-500 mt-2">
+                  The organization settings (GET/POST /v1/org) also store key_rotation_days,
+                  key_rotation_enforcement_mode and key_rotation_grace_days, but the middleware does not read them;
+                  only these environment variables apply.
                 </p>
           </div>
         </GlassCard>
@@ -134,7 +144,13 @@ KEY_ROTATION_MAX_DAYS=90
         <GlassCard>
           <div className="p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-4">Check Key Age (example response)</h2>
-            <CodeBlock 
+            <p className="text-sm text-slate-600 mb-4">
+              <strong>Current build:</strong> the middleware takes the key id from request.state.key_id, and nothing
+              in the engine sets it, so responses pass through without these headers and enforce mode does not
+              block. The headers and the 403 below are what the middleware returns when it is given the key id, as
+              in its tests (packages/engine/tests/test_middleware.py).
+            </p>
+            <CodeBlock
               language="bash"
               code={`HTTP/1.1 200 OK
 X-Oxy-Key-Rotation-Status: warning
@@ -153,7 +169,8 @@ X-Oxy-Key-Rotation-URL: http://localhost:3000/dashboard/api-keys`}
           <div>
             <h3 className="font-semibold text-amber-800 mb-1">When a Key Expires</h3>
             <p className="text-sm text-amber-700 mb-2">
-              mode=enforce returns 403 with structured error:
+              mode=enforce returns 403 with structured error. The check runs after the request has been handled,
+              so the 403 replaces the response of a request that was already processed:
             </p>
             <CodeBlock 
               language="json"

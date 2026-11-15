@@ -25,6 +25,7 @@ def build_app(sessions, timeline=None):
             self.sessions = sessions
             self.timeline = timeline or []
             self.last_post = None
+            self.posts = []
             self.calls = []
 
         async def get(self, url, params=None, headers=None):
@@ -50,6 +51,7 @@ def build_app(sessions, timeline=None):
 
         async def post(self, url, headers=None, json=None):
             self.last_post = (url, json)
+            self.posts.append(url)
             return type("R", (), {"status_code": 200, "json": lambda: True, "raise_for_status": lambda: None})
 
     s.resources.http_client = FakeHttpClient(sessions, timeline)  # type: ignore
@@ -68,27 +70,45 @@ def test_list_agent_sessions():
     assert data["sessions"][0]["id"] == "s1"
 
 
+SID = "5e55a7c3-0000-4000-8000-000000000001"
+
+
 def test_get_agent_session_detail():
     sessions = [
-        {"id": "s1", "status": "running", "session_type": "task", "metadata": {"model": "gpt-4"}, "total_cost": "0.1"},
+        {"id": SID, "status": "running", "session_type": "task", "metadata": {"model": "gpt-4"}, "total_cost": "0.1"},
     ]
     timeline = [{"id": "r1", "model": "gpt-4"}]
     app = build_app(sessions, timeline)
     client = TestClient(app)
-    r = client.get("/v1/agent-sessions/s1", headers={"Authorization": "Bearer oxy"})
+    r = client.get("/v1/agent-sessions/%s" % SID, headers={"Authorization": "Bearer oxy"})
     assert r.status_code == 200
     data = r.json()
-    assert data["id"] == "s1"
+    assert data["id"] == SID
     assert "timeline" in data
+    from routes import agent_sessions_v1 as s
+    timeline_calls = [params for url, params in s.resources.http_client.calls if "request_logs" in url]
+    assert timeline_calls and timeline_calls[0].get("session_id") == "eq.%s" % SID
 
 
 def test_kill_agent_session():
     sessions = [
-        {"id": "s1", "status": "running", "session_type": "task", "metadata": {"model": "gpt-4"}, "total_cost": "0.1"},
+        {"id": SID, "status": "running", "session_type": "task", "metadata": {"model": "gpt-4"}, "total_cost": "0.1"},
     ]
     app = build_app(sessions)
     client = TestClient(app)
-    r = client.post("/v1/agent-sessions/s1/kill", headers={"Authorization": "Bearer oxy"})
+    r = client.post("/v1/agent-sessions/%s/kill" % SID, headers={"Authorization": "Bearer oxy"})
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
+    from routes import agent_sessions_v1 as s
+    owned = [params for url, params in s.resources.http_client.calls if "agent_sessions" in url]
+    assert owned and owned[0].get("organization_id") == "eq.org-1", "ownership is checked against the key's organization"
+    assert any(u.endswith("/rpc/fn_kill_agent_session") for u in s.resources.http_client.posts)
 
+
+def test_kill_of_another_organizations_session_is_refused():
+    app = build_app([])  # the key's organization owns no such session
+    client = TestClient(app)
+    r = client.post("/v1/agent-sessions/%s/kill" % SID, headers={"Authorization": "Bearer oxy"})
+    assert r.status_code == 404
+    from routes import agent_sessions_v1 as s
+    assert s.resources.http_client.last_post is None, "no kill was attempted"

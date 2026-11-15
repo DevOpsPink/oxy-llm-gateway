@@ -317,6 +317,7 @@ class SupabaseTable:
         self._filters = {}
         self._select_fields = "*"
         self._limit_value = None
+        self._offset_value = None
         self._single = False
         self._update_data = None
         self._delete = False
@@ -376,6 +377,17 @@ class SupabaseTable:
     def limit(self, count: int):
         """Limit results."""
         self._limit_value = count
+        return self
+
+    def or_(self, filters: str):
+        """PostgREST or=(...): filters as supabase-py takes them, e.g. "a.eq.1,b.is.null"."""
+        self._range_filters.append(("or", "(%s)" % filters))
+        return self
+
+    def range(self, start: int, end: int):
+        """Rows start..end, inclusive (supabase-py's range): offset and limit."""
+        self._offset_value = max(0, int(start))
+        self._limit_value = max(0, int(end) - int(start) + 1)
         return self
 
     def single(self):
@@ -459,6 +471,8 @@ class SupabaseTable:
             params_list.append(("order", self._order))
         if self._limit_value:
             params_list.append(("limit", str(self._limit_value)))
+        if self._offset_value:
+            params_list.append(("offset", str(self._offset_value)))
 
         headers = {"apikey": self.key, "Authorization": f"Bearer {self.key}"}
         if self._count:
@@ -650,7 +664,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title="Oxy Engine API", 
-    version="1.0.0",
+    version="1.0.1",
     description="""
 # Oxy Engine - AI Control Plane
 
@@ -672,7 +686,7 @@ One API for cloud LLMs (OpenAI, Anthropic, Google) + local models (Ollama, vLLM)
 All API endpoints (except auth) require a Bearer token:
 
 ```
-Authorization: Bearer oxy_sk_your_api_key_here
+Authorization: Bearer oxy_live_your_api_key_here
 ```
 
 Get your API key from the dashboard of your deployment (http://localhost:3000/dashboard on the local stack).
@@ -701,7 +715,7 @@ Machine-readable OpenAPI specification available at `/openapi.json` for AI agent
 
 ### Quick Start for AI Agents
 1. Obtain API key from dashboard or `/v1/auth/login` endpoint
-2. Set header: `Authorization: Bearer oxy_sk_xxx`
+2. Set header: `Authorization: Bearer oxy_live_...`
 3. For agent sessions, include: `X-Oxy-Agent-Id`, `X-Oxy-Session-Id`
 4. Call `/v1/chat/completions` with OpenAI-compatible format
 
@@ -760,7 +774,7 @@ Machine-readable OpenAPI specification available at `/openapi.json` for AI agent
         {
             "name": "auth",
             "description": "Authentication - Login, token refresh, API key management. Required for all other endpoints.",
-            "x-llm-hint": "Call POST /v1/auth/login first to get JWT. For API key auth, use Authorization: Bearer oxy_sk_xxx."
+            "x-llm-hint": "Call POST /v1/auth/login first to get JWT. For API key auth, use Authorization: Bearer oxy_live_...."
         },
         {
             "name": "mcp",
@@ -907,10 +921,7 @@ log.info("sso_router_loaded",
          message="Enterprise SSO/SAML enabled")
 
 # Include reports router (CSV export)
-from routes.reports import router as reports_router
-app.include_router(reports_router)
-log.info("reports_router_loaded",
-         message="CSV export endpoint active")
+# CSV export of the request log: GET /v1/exports/requests.csv (routes/exports.py).
 
 # REFACTORING PHASE 1: Include refactored auth router
 # Handles: /management/onboard, /management/profile, /management/provider
@@ -1970,15 +1981,15 @@ async def list_user_organizations(request: Request, user_id: str = Depends(get_c
         
         # Transform to clean response format
         result = []
-        for org_membership in user_orgs:
-            org_data = org_membership.get("organizations", {})
-            if org_data:
-                result.append({
-                    "id": org_data.get("id"),
-                    "name": org_data.get("name"),
-                    "role": org_membership.get("role"),
-                    "is_owner": org_data.get("owner_user_id") == user_id
-                })
+        # get_user_organizations returns each membership with the organization's
+        # columns merged in (id, name, owner_user_id), not nested under "organizations".
+        for org in user_orgs:
+            result.append({
+                "id": org.get("id") or org.get("organization_id"),
+                "name": org.get("name"),
+                "role": org.get("role"),
+                "is_owner": org.get("owner_user_id") == user_id
+            })
         
         return result
     except Exception as e:
@@ -2171,7 +2182,7 @@ async def management_list_keys(
             return [
                 {
                     "id": "demo-key-1",
-                    "key_prefix": "oxy_sk_demo",
+                    "key_prefix": "oxy_live_demo",
                     "name": "Demo API Key",  # Frontend expects 'name', backend maps from 'key_name'
                     "created_at": "2024-01-01T00:00:00Z",
                     "is_demo": True
@@ -2242,8 +2253,9 @@ async def management_list_keys(
         res = await core.resources.http_client.get(
             f"{SUPABASE_URL}/rest/v1/api_keys",
             params={
-                "select": "id,key_prefix,key_name,created_at",
-                "project_id": f"eq.{project_id}"
+                "select": "id,key_prefix,key_name,created_at,last_used_at,is_active",
+                "project_id": f"eq.{project_id}",
+                "order": "created_at.desc"
             },
             headers=get_supabase_headers()
         )
@@ -2576,109 +2588,6 @@ async def check_burst_rate_limit(request: Request, user_id: str) -> None:
         log.error("burst_rate_limit_check_failed", error=str(e), exc_info=True)
 
 
-# ============================================================================
-# SUBSCRIPTION CHECK (PLAN LIMITS)
-# ============================================================================
-# This function enforces plan limits BEFORE processing requests
-# Prevents usage beyond the quota of the organization's plan tier
-# ============================================================================
-
-async def check_subscription_limits(user_id: str, project_id: str) -> dict:
-    """
-    Verify user has active subscription and hasn't exceeded plan limits.
-    
-    CRITICAL: This runs BEFORE budget check to prevent unauthorized usage.
-    Returns subscription data if valid, raises HTTPException if invalid.
-    
-    Plan Limits:
-    - Starter: 100,000 requests/month, 1 project, 3 team members
-    - Professional: 1,000,000 requests/month, 10 projects, 15 team members
-    - Enterprise: Unlimited (usage-based billing for overages)
-    """
-    try:
-        # Get active subscription
-        sub_result = await core.resources.supabase.table("subscriptions").select("*").eq("user_id", user_id).eq("status", "active").single().execute()
-        
-        if not sub_result.data:
-            log.warn("no_active_subscription", user_id=user_id, project_id=project_id)
-            raise HTTPException(
-                status_code=402,  # Payment Required
-                detail="No active subscription found. Please subscribe at /pricing to use Oxy Engine."
-            )
-        
-        subscription = sub_result.data
-        plan_tier = subscription["plan_tier"]
-        subscription_id = subscription["id"]
-        
-        # Get current billing period
-        period_start = subscription["current_period_start"]
-        period_end = subscription["current_period_end"]
-        
-        # Check if subscription is past due (payment failed)
-        if subscription["status"] == "past_due":
-            log.warn("subscription_past_due", user_id=user_id, subscription_id=subscription_id)
-            raise HTTPException(
-                status_code=402,
-                detail="Subscription payment failed. Please update your payment method."
-            )
-        
-        # Get usage for current period
-        usage_result = await core.resources.supabase.table("subscription_usage").select("requests_count").eq("subscription_id", subscription_id).eq("period_start", period_start).single().execute()
-        
-        current_usage = usage_result.data["requests_count"] if usage_result.data else 0
-        
-        # Keep in sync with packages/engine/routes/billing.py PLAN_LIMITS
-        # and packages/ui/src/app/pricing/page.tsx
-        plan_limits = {
-            "free": {"requests": 100_000, "projects": 1, "agents": 3, "team_members": 1},
-            "starter": {"requests": 500_000, "projects": 5, "agents": 10, "team_members": 3},
-            "growth": {"requests": 2_000_000, "projects": 20, "agents": 50, "team_members": 10},
-            "business": {"requests": 10_000_000, "projects": None, "agents": None, "team_members": 50},
-            "enterprise": {"requests": None, "projects": None, "agents": None, "team_members": None}
-        }
-        
-        limits = plan_limits.get(plan_tier, plan_limits["free"])
-        request_limit = limits["requests"]
-        
-        # Check request limit (only for non-Enterprise plans)
-        if request_limit is not None and current_usage >= request_limit:
-            log.warn("subscription_limit_exceeded", user_id=user_id, plan=plan_tier, usage=current_usage, limit=request_limit)
-            raise HTTPException(
-                status_code=429,  # Too Many Requests
-                detail=f"Monthly request limit of {request_limit:,} reached for {plan_tier.title()} plan. The limit resets on {period_end}; an operator can raise the plan tier."
-            )
-        
-        # FIXED: Don't increment usage here - it will be incremented in log_request with actual tokens
-        # This prevents race condition where tokens are set to 0 and never updated
-        
-        log.info("subscription_check_passed", user_id=user_id, plan=plan_tier, usage=current_usage, limit=request_limit)
-        
-        # Return subscription with ID for usage tracking
-        return {**subscription, "subscription_id": subscription_id}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.error("subscription_check_failed", user_id=user_id, project_id=project_id, exc_info=True)
-        raise HTTPException(status_code=500, detail="Subscription verification failed. Please contact support.")
-
-
-# ============================================================================
-# PROXY ENDPOINT - MIGRATED TO routes/proxy.py
-# ============================================================================
-# The /v1/chat/completions endpoint has been extracted to routes/proxy.py
-# for better modularity and maintainability. See app.include_router(proxy_router) above.
-# 
-# Old code (572 lines) removed 2025-11-22
-# ============================================================================
-
-# @app.post("/v1/chat/completions") - NOW IN routes/proxy.py
-# ... (572 lines of proxy logic removed for modularity)
-
-
-
-
-
 @app.get("/metrics")
 async def metrics(credentials: HTTPBasicCredentials = Depends(HTTPBasic())):
     """
@@ -2737,7 +2646,7 @@ async def health(request: Request):
     """
     health_status = {
         "status": "active",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     

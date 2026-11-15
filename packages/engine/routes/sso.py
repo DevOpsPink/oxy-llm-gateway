@@ -322,6 +322,12 @@ async def sso_callback(
     
     Critical: This must be FAST (< 200ms) to not block login
     """
+    # Not wired in this release: the database functions it calls do not exist, and
+    # it trusts the user_id and email in the body with no authentication. It must
+    # verify the identity provider's assertion before it can join anyone to an
+    # organization; until then it refuses.
+    raise HTTPException(status_code=501, detail="SSO sign-in is not available in this release.")
+
     domain = extract_domain(request.email)
     
     try:

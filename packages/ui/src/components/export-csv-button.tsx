@@ -44,7 +44,8 @@ export function ExportCSVButton() {
         throw new Error('API URL not configured')
       }
 
-      const url = `${apiUrl}/api/v1/reports/export?start_date=${startDateStr}&end_date=${endDateStr}`
+      // The organization's request log (GET /v1/exports/requests.csv), with the session.
+      const url = `${apiUrl}/v1/exports/requests.csv?from=${startDate.toISOString()}&to=${endDate.toISOString()}`
       const res = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`
@@ -62,14 +63,14 @@ export function ExportCSVButton() {
       const downloadUrl = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = downloadUrl
-      link.download = `oxy_usage_${startDateStr}_to_${endDateStr}.csv`
+      link.download = `oxy_requests_${startDateStr}_to_${endDateStr}.csv`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(downloadUrl)
 
       toast.success('Export Complete', {
-        description: `Downloaded usage data for ${startDateStr} to ${endDateStr}`,
+        description: `Downloaded the request log for ${startDateStr} to ${endDateStr}`,
         duration: 5000
       })
 

@@ -78,7 +78,7 @@ def test_create_invite():
     invites = []
     app = build_app(members, invites)
     client = TestClient(app)
-    r = client.post("/v1/team/invites", json={"email": "new@user.com", "role": "member"}, headers={"Authorization": "Bearer oxy"})
+    r = client.post("/v1/team/invites", json={"email": "new@user.com", "role": "developer"}, headers={"Authorization": "Bearer oxy"})
     assert r.status_code == 200
     data = r.json()
     assert data["email"] == "new@user.com"

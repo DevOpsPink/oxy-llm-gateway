@@ -19,7 +19,7 @@ from typing import Dict, Any, List, Optional
 import inspect
 from decimal import Decimal
 
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Query
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import structlog
@@ -45,7 +45,8 @@ from workers.anomaly_detector import (
 # ============================================================================
 
 router = APIRouter(prefix="/v1/intelligence", tags=["intelligence"])
-api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key)
+# The dashboard calls these routes with its session; scripts with an Oxy API key.
+api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key, allow_session=True)
 
 
 # ============================================================================
@@ -258,7 +259,7 @@ async def _fetch_top_projects(org_id: str, month_start: datetime, limit: int = 5
         ids = [r.get("project_id") for r in rows if r.get("project_id")]
         names: Dict[str, str] = {}
         if ids:
-            proj_res = resources.supabase.table("projects").select("id,name").in_("id", ids).execute()
+            proj_res = await resources.supabase.table("projects").select("id,name").in_("id", ids).execute()
             for row in proj_res.data or []:
                 names[row["id"]] = row.get("name", "")
 
@@ -450,7 +451,7 @@ async def get_user_and_org_from_jwt(request) -> Dict[str, str]:
 
 @router.get("/anomalies")
 async def get_anomalies(
-    request,
+    request: Request,
     severity: Optional[str] = Query(None, pattern="^(low|medium|high|critical)$"),
     anomaly_type: Optional[str] = None,
     status: Optional[str] = Query("new", pattern="^(new|acknowledged|resolved|ignored)$"),
@@ -505,7 +506,7 @@ async def get_anomalies(
 
 
 @router.post("/anomalies/detect")
-async def detect_anomalies_now(request):
+async def detect_anomalies_now(request: Request):
     """
     Trigger anomaly detection immediately (on-demand).
     
@@ -575,7 +576,7 @@ async def intelligence_overview(
 @router.patch("/anomalies/{anomaly_id}")
 async def update_anomaly_status(
     anomaly_id: str,
-    request,
+    request: Request,
     status: str = Query(..., pattern="^(acknowledged|resolved|ignored)$")
 ):
     """
@@ -618,7 +619,7 @@ async def update_anomaly_status(
 # ============================================================================
 
 @router.get("/cost-insights")
-async def get_cost_insights(request):
+async def get_cost_insights(request: Request):
     """
     Get cost insights and optimization recommendations.
     
@@ -732,7 +733,7 @@ async def get_cost_insights(request):
 
 
 @router.get("/spend-forecast")
-async def get_spend_forecast(request):
+async def get_spend_forecast(request: Request):
     """
     Get spend forecast for the current billing period.
     
@@ -800,7 +801,7 @@ async def get_spend_forecast(request):
 # ============================================================================
 
 @router.get("/security-score")
-async def get_security_score(request):
+async def get_security_score(request: Request):
     """
     Get organization's security score.
     

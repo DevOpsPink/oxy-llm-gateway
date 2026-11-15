@@ -16,18 +16,25 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 type ApiKey = {
   id: string
   name: string
-  prefix: string
+  key_prefix: string
   created_at?: string
-  last_used_at?: string
-  rotation_required_at?: string
-  status: string
+  last_used_at?: string | null
+  is_active?: boolean
 }
 
+type Project = { id: string; name: string }
+
+// Keys are managed with the dashboard session through the /management
+// endpoints (the same ones the main dashboard uses). /v1/api-keys takes an
+// Oxy API key, not a session, so it cannot serve this page.
 export default function ApiKeysPage() {
   const supabase = useMemo(() => createClient(), [])
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL
   const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [projectId, setProjectId] = useState<string | null>(null)
   const [items, setItems] = useState<ApiKey[]>([])
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
@@ -40,39 +47,53 @@ export default function ApiKeysPage() {
     }).catch(() => setToken(null))
   }, [supabase])
 
-  const fetchKeys = useCallback(async () => {
+  useEffect(() => {
     if (!token) return
+    authenticatedFetch(`${apiUrl}/management/projects`, {}, token)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await handleApiError(res))
+        const list: Project[] = await res.json()
+        setProjects(list)
+        setProjectId((current) => current || list[0]?.id || null)
+        if (!list.length) setLoading(false)
+      })
+      .catch((err) => { setError(safeErrorMessage(err)); setLoading(false) })
+  }, [token, apiUrl])
+
+  const fetchKeys = useCallback(async () => {
+    if (!token || !projectId) return
     setLoading(true)
     setError(null)
     try {
-      const res = await authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL}/v1/api-keys`, {}, token)
+      const res = await authenticatedFetch(
+        `${apiUrl}/management/keys?projectId=${encodeURIComponent(projectId)}`, {}, token)
       if (!res.ok) throw new Error(await handleApiError(res))
-      const json = await res.json()
-      setItems(json.items || [])
+      setItems(await res.json())
     } catch (err) {
       setError(safeErrorMessage(err))
     } finally {
       setLoading(false)
     }
-  }, [token])
+  }, [token, projectId, apiUrl])
 
   useEffect(() => {
     fetchKeys()
   }, [fetchKeys])
 
   const createKey = async () => {
-    if (!token) return
+    if (!token || !projectId) return
     setCreating(true)
     setCreatedSecret(null)
     try {
+      const name = encodeURIComponent((newName || 'API Key').slice(0, 50))
       const res = await authenticatedFetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/v1/api-keys`,
-        { method: 'POST', body: JSON.stringify({ name: newName || 'API Key' }) },
+        `${apiUrl}/management/key?projectId=${encodeURIComponent(projectId)}&name=${name}`,
+        { method: 'POST' },
         token
       )
       if (!res.ok) throw new Error(await handleApiError(res))
       const json = await res.json()
-      setCreatedSecret(json.secret)
+      setCreatedSecret(json.api_key)
       setNewName('')
       fetchKeys()
     } catch (err) {
@@ -83,11 +104,11 @@ export default function ApiKeysPage() {
   }
 
   const revokeKey = async (id: string) => {
-    if (!token) return
-    if (!confirm('Revoke this API key?')) return
+    if (!token || !projectId) return
+    if (!confirm('Revoke this API key? It stops working at once.')) return
     try {
       const res = await authenticatedFetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/v1/api-keys/${id}`,
+        `${apiUrl}/management/key/${encodeURIComponent(id)}?projectId=${encodeURIComponent(projectId)}`,
         { method: 'DELETE' },
         token
       )
@@ -134,18 +155,18 @@ export default function ApiKeysPage() {
         </TableHeader>
         <TableBody>
           {items.map((k) => (
-            <TableRow key={k.id} onClick={() => setSelectedPrefix(k.prefix || selectedPrefix)}>
+            <TableRow key={k.id} onClick={() => setSelectedPrefix(k.key_prefix || selectedPrefix)}>
               <TableCell>{k.name}</TableCell>
-              <TableCell className="font-mono text-xs">{k.prefix}</TableCell>
+              <TableCell className="font-mono text-xs">{k.key_prefix}</TableCell>
               <TableCell>
-                <Badge variant={k.status === 'active' ? 'secondary' : 'destructive'}>
-                  {k.status === 'active' ? 'Active' : 'Revoked'}
+                <Badge variant={k.is_active !== false ? 'secondary' : 'destructive'}>
+                  {k.is_active !== false ? 'Active' : 'Inactive'}
                 </Badge>
               </TableCell>
               <TableCell className="text-xs text-muted-foreground">{k.created_at || '—'}</TableCell>
               <TableCell className="text-xs text-muted-foreground">{k.last_used_at || 'Never'}</TableCell>
               <TableCell>
-                {k.status === 'active' && (
+                {k.is_active !== false && (
                   <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); revokeKey(k.id) }}>
                     Revoke
                   </Button>
@@ -235,9 +256,20 @@ console.log(await resp.json());`}
             <h1 className="text-2xl font-semibold">API Keys</h1>
             <p className="text-sm text-muted-foreground">Create keys for your services and agents. Keep them secret, rotate regularly.</p>
           </div>
+          <div className="flex items-center gap-3">
+          {projects.length > 1 && (
+            <select
+              aria-label="Project"
+              className="border rounded-md px-2 py-1.5 text-sm bg-white"
+              value={projectId || ''}
+              onChange={(e) => setProjectId(e.target.value)}
+            >
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          )}
           <Dialog>
             <DialogTrigger asChild>
-              <Button>Create API Key</Button>
+              <Button disabled={!projectId}>Create API Key</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
@@ -265,6 +297,7 @@ console.log(await resp.json());`}
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
         <Card>
           <CardHeader>

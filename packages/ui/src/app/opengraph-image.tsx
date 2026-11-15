@@ -135,7 +135,7 @@ export default async function Image() {
               fontWeight: '600',
             }}
           >
-            🔒 100K Free Requests
+            🔒 Self-hosted
           </div>
         </div>
 

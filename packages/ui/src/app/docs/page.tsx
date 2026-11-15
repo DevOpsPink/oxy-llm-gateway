@@ -10,7 +10,7 @@
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { 
-  Shield, Zap, DollarSign, ArrowRight, Clock,
+  Shield, Zap, DollarSign, ArrowRight,
   Terminal, CheckCircle2, Copy, ExternalLink
 } from 'lucide-react'
 import { useState } from 'react'
@@ -82,14 +82,14 @@ export default function DocsHomePage() {
       >
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-violet-100 text-violet-700 text-sm font-medium mb-4">
           <Zap className="h-4 w-4" />
-          Quick Start in Minutes
+          Quick Start
         </div>
         <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-4">
           Oxy Documentation
         </h1>
         <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-          Control your AI agents with one line of code. This guide will get you 
-          from zero to protected in minutes.
+          Oxy is a self-hosted LLM gateway, an Apache-2.0 reference implementation with no SLA. Point an
+          OpenAI-compatible client at it to get budgets, DLP, a kill switch and request logs.
         </p>
       </motion.div>
 
@@ -107,7 +107,7 @@ export default function DocsHomePage() {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-slate-900">Quick Start</h2>
-                <p className="text-sm text-slate-500">Get protected in 3 steps</p>
+                <p className="text-sm text-slate-500">Three steps</p>
               </div>
             </div>
 
@@ -118,8 +118,9 @@ export default function DocsHomePage() {
                 <h3 className="font-semibold text-slate-900">Get your API key</h3>
               </div>
               <p className="text-slate-600 mb-3 ml-11">
-                Sign up at <Link href="/login" className="text-violet-600 hover:underline">/login</Link> and 
-                create your first project. Copy your API key from the dashboard.
+                Sign in at <Link href="/login" className="text-violet-600 hover:underline">/login</Link> with a magic link
+                (a new email address creates the account), create a project on the Control Plane, and create a key
+                under <strong>API Keys</strong>. Add your provider key in <strong>Settings</strong>.
               </p>
             </div>
 
@@ -127,10 +128,12 @@ export default function DocsHomePage() {
             <div className="mb-8">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center text-violet-700 font-bold text-sm">2</div>
-                <h3 className="font-semibold text-slate-900">Change one line of code</h3>
+                <h3 className="font-semibold text-slate-900">Point your client at Oxy</h3>
               </div>
               <p className="text-slate-600 mb-3 ml-11">
-                Replace your OpenAI base URL with Oxy's proxy:
+                Use your Oxy key as the API key and Oxy&apos;s engine as the base URL. Oxy proxies
+                POST /v1/chat/completions and calls the provider with your organization&apos;s key from Settings, or else
+                OPENAI_API_KEY, ANTHROPIC_API_KEY or GOOGLE_API_KEY from the engine&apos;s environment:
               </p>
               <div className="ml-11">
                 <CodeBlock 
@@ -138,14 +141,11 @@ export default function DocsHomePage() {
                   code={`# Before
 client = OpenAI(api_key="sk-...")
 
-# After — just add base_url
+# After: your Oxy key and Oxy's base URL
 client = OpenAI(
-    api_key="sk-...",
-    base_url="http://localhost:8000/v1"  # ← Add this line
-)
-
-# Add your Oxy key to headers
-client.default_headers["Authorization"] = "Bearer oxy_sk_..."`}
+    api_key="oxy_live_...",               # Oxy API key, sent as Authorization: Bearer
+    base_url="http://localhost:8000/v1"   # ← Add this line
+)`}
                 />
               </div>
             </div>
@@ -154,18 +154,18 @@ client.default_headers["Authorization"] = "Bearer oxy_sk_..."`}
             <div className="mb-8">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center text-violet-700 font-bold text-sm">3</div>
-                <h3 className="font-semibold text-slate-900">You're protected!</h3>
+                <h3 className="font-semibold text-slate-900">What you get</h3>
               </div>
               <p className="text-slate-600 ml-11">
-                That's it. Your requests now flow through Oxy. You get:
+                Your requests now go through Oxy. You get:
               </p>
               <ul className="mt-3 ml-11 space-y-2">
                 {[
-                  'Real-time visibility into all AI actions',
-                  'Kill switch to stop any agent in milliseconds',
-                  'DLP scanning for leaked secrets',
-                  'Budget controls and alerts',
-                  'Full audit trail for compliance'
+                  'Every request recorded in request_logs (Dashboard → Requests)',
+                  'A kill switch for agent sessions: later requests get 410',
+                  'DLP that blocks secrets in prompts with 451',
+                  'A spend cap per project: over it, requests get 402',
+                  'An audit log of admin actions'
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2 text-slate-600">
                     <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -175,11 +175,6 @@ client.default_headers["Authorization"] = "Bearer oxy_sk_..."`}
               </ul>
             </div>
 
-            {/* Time estimate */}
-            <div className="flex items-center gap-2 text-sm text-slate-500 pt-4 border-t border-slate-200">
-              <Clock className="h-4 w-4" />
-              Average setup time: 4 minutes 32 seconds
-            </div>
           </div>
         </GlassCard>
       </motion.div>
@@ -210,7 +205,7 @@ client.default_headers["Authorization"] = "Bearer oxy_sk_..."`}
             {
               icon: Shield,
               title: 'Security & Operations',
-              desc: 'SSO, key rotation, webhooks, compliance',
+              desc: 'SSO, key rotation, webhooks',
               href: '/docs/features/sso',
               gradient: 'from-violet-500 to-purple-600'
             },

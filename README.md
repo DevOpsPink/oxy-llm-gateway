@@ -16,7 +16,7 @@ The last two badges are not typed by hand: they are CI's proofs over the last 30
 
 A complete control plane for LLM traffic, split across:
 
-- **`packages/engine`** — FastAPI gateway exposing an OpenAI-compatible `/v1/chat/completions` endpoint with provider routing (OpenAI, Anthropic, Gemini, Ollama, vLLM), per-project budgets, response caching, DLP, kill switch, audit logs, and cost attribution. 289 offline unit tests.
+- **`packages/engine`** — FastAPI gateway exposing an OpenAI-compatible `/v1/chat/completions` endpoint with provider routing (OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint through `OPENAI_API_BASE`), per-project budgets, response caching, DLP, kill switch, audit logs, and cost attribution. 397 offline unit tests.
 - **`packages/ui`** — Next.js dashboard for keys, agents, budgets, privacy modes, audit logs, billing, intelligence, and playground.
 - **`db/`** — Postgres golden schema plus a Supabase-compatibility shim so the same code runs on either a hosted Supabase project or a local self-hosted stack.
 - **`docker-compose.yml`** — the local stack: Postgres, PostgREST, GoTrue (auth), Mailpit (local mail for magic links), nginx (URL-shape adapter), Redis, the engine with six background workers, and the UI.
@@ -31,7 +31,7 @@ docker compose up -d --build --wait
 
 ![From a clean clone to "pong": docker compose up, a magic link through Mailpit, an Oxy API key, a request through the gateway](docs/walkthrough.gif)
 
-Recorded on a clean GitHub runner by [`.github/workflows/walkthrough.yml`](https://github.com/heyvaldemar/oxy-llm-gateway/actions/runs/43744856761) from [`scripts/walkthrough.sh`](scripts/walkthrough.sh), which prints every command and runs it as printed; build output is hidden and replayed at double speed. The cast is in [`docs/walkthrough.cast`](docs/walkthrough.cast) (`asciinema play docs/walkthrough.cast`).
+The terminal recording comes from Walkthrough run [43744856761](https://github.com/heyvaldemar/oxy-llm-gateway/actions/runs/43744856761) on 2026-11-15: [`.github/workflows/walkthrough.yml`](.github/workflows/walkthrough.yml) ran [`scripts/walkthrough.sh`](scripts/walkthrough.sh) under asciinema on a clean GitHub runner, and the script prints every command and runs it as printed. That run's cast is [`docs/walkthrough.cast`](docs/walkthrough.cast) (`asciinema play docs/walkthrough.cast`); the GIF was rendered from it afterwards with agg, outside CI, with the build output hidden and at double speed.
 
 The first build takes a few minutes. No `.env` file, cloud account or provider key is needed to start. Then:
 
@@ -137,21 +137,21 @@ The same gateway code path runs against a hosted Supabase project (set `SUPABASE
 
 ## Feature surface
 
-Core gateway capabilities (all implemented, all heuristic where noted, all best-effort — no SLAs):
+What the gateway does today (heuristic where noted, best-effort, no SLA); what is not wired yet is listed under [Scope and honest limitations](#scope-and-honest-limitations):
 
-- **Budgets and alerts** — a spend cap per project, reserved atomically before a request reaches a provider and settled at the real cost after it; alerts as spend nears the cap, and optional cost-spike auto-suspend. Agents have budget fields in the schema, but the request path enforces the project's cap only
+- **Budgets** — a spend cap per project, reserved atomically before a request reaches a provider and settled at the real cost after it; email alerts at 80, 95 and 100% through SendGrid when `EMAIL_ENABLED` and `SENDGRID_API_KEY` are set. Agents have budget fields in the schema, but the request path enforces the project's cap only
 - **Kill switch** — best-effort stop on agent sessions, blocks further requests
 - **Loop detection** — heuristic detection of repeated/stuck agent calls
-- **Response caching** — deterministic-request cache via Redis with AES-encrypted payloads
+- **Response caching** — deterministic requests (`temperature` 0) cached in Redis per organization for 7 days; a hit is still recorded and charged to the budget
 - **Cost optimizer** — heuristic recommendations (model switch, caching, throttling) based on recent request logs
-- **Cost attribution** — tag spend by customer/team/feature, export to CSV
+- **Request export** — the organization's request log as CSV (`GET /v1/exports/requests.csv`)
 - **Privacy modes** — `zero_prompt_logging`, `metadata_only`, `debug_full`
 - **DLP** — regex detection before a request leaves the gateway: API keys and tokens (OpenAI, Anthropic, AWS, Stripe live, GitHub, Slack, Google), JWTs, private keys and card numbers. Email addresses alone are not blocked.
-- **Audit logs** — request logs with configurable retention
+- **Audit logs** — a `request_logs` row for every request, refusals included, and an admin audit log; a retention window per organization is stored (`/v1/privacy`)
 - **Rate limiting and security headers** — per-key throttling, HSTS/CSP/etc.
 - **Geo / IP protections** — header-first country/region blocking
-- **Webhooks + Slack/Discord/Zapier outbound** — best-effort alert delivery
-- **Local LLM support** — Ollama, vLLM, or any OpenAI-compatible local endpoint
+- **Notification settings** — Slack, Discord and Zapier webhook URLs and events per organization are stored (`/v1/notifications/settings`); see below for what is delivered
+- **Self-hosted models** — any OpenAI-compatible endpoint (vLLM, Ollama's OpenAI API, an inference gateway) through `OPENAI_API_BASE`, as the proofs' fake provider is wired. The dedicated Ollama and vLLM adapters in `providers/` are not reachable from the gateway yet: it requires a stored provider key for them, which the `providers` table cannot hold
 - **Intelligence + security score** — heuristic dashboard signals (advisory only)
 
 For the canonical mapping between feature, code, tests, and docs see `docs/product/FEATURE_MATRIX.yml`.
@@ -192,7 +192,7 @@ python3 proofs/run_proofs.py
 python3 proofs/plant_violations.py
 ```
 
-The numbers above come from CI run [43743799006](https://github.com/heyvaldemar/oxy-llm-gateway/actions/runs/43743799006) (job [Proofs, each shown its planted violation](https://github.com/heyvaldemar/oxy-llm-gateway/actions/runs/43743799006/job/132902541584)) on 2026-11-15, the first run on the public repository: all nine proofs held and all ten planted violations were caught. The stack is the default one, a single engine process on a GitHub-hosted runner. The latest run's numbers are in [`status.json`](https://github.com/heyvaldemar/oxy-llm-gateway/blob/status/status.json).
+Every number in this table comes from one run: CI run [43743799006](https://github.com/heyvaldemar/oxy-llm-gateway/actions/runs/43743799006) (job [Proofs, each shown its planted violation](https://github.com/heyvaldemar/oxy-llm-gateway/actions/runs/43743799006/job/132902541584)) on 2026-11-15, the first run of v1.0.0 on the public repository, where all nine proofs held and all ten planted violations were caught. The stack is the default one, a single engine process on a GitHub-hosted runner. The latest run's numbers, with its run id, are in [`status.json`](https://github.com/heyvaldemar/oxy-llm-gateway/blob/status/status.json); they move a little from run to run (the kill switch's first refusal, the number of requests sent).
 
 ## Scope and honest limitations
 
@@ -201,6 +201,7 @@ The numbers above come from CI run [43743799006](https://github.com/heyvaldemar/
 - **The vault shim uses pgcrypto AES with a configurable key.** It is intentionally weaker than Supabase's pgsodium-backed Vault. Review `db/supabase-compat.sql` before storing real provider keys in it.
 - **Email auto-confirm is on by default** so signups work without SMTP. Disable `GOTRUE_MAILER_AUTOCONFIRM` and configure SMTP for any deployment that handles real users.
 - **A budget is the project's total spend**, not a monthly allowance: nothing resets it. The Redis counter is the ledger; the budget worker copies it to `projects.current_spend` every 60 s, and if Redis loses the counter it resumes from that copy, so at most the last minute's spend can be spent again.
+- **Not wired in this release.** These have code or schema in the repository but do not work end to end, and the dashboard does not offer them: accepting team invitations (`/management/team/invite/accept` answers 501; an operator adds members in `organization_members`); SSO sign-in (`/auth/sso/callback` answers 501, three database functions are missing); delivery to registered webhooks and the Slack, Discord and Zapier alerts; cost-spike auto-suspend (the worker reads a column that does not exist); scheduled deletion by the retention window; approving an MCP tool call; redeeming referral credits; cost attribution tags (nothing writes them); key-rotation headers; the dedicated Ollama and vLLM adapters; enforcing agent budgets, team-member caps and per-tool MCP limits.
 - **Without Redis the gateway refuses what it cannot check.** A request against a budget answers 503; a request in an agent session is decided by the session's row in Postgres, or refused. Other requests are still served, a little slower (the API key is looked up in Postgres).
 
 ## Tech stack
@@ -209,7 +210,7 @@ The numbers above come from CI run [43743799006](https://github.com/heyvaldemar/
 - Frontend: Next.js 16 (App Router, Turbopack), TypeScript strict, supabase-js + `@supabase/ssr`, Radix UI primitives, Tailwind
 - Data: Postgres 16, PostgREST 12, GoTrue (Supabase Auth) v2
 - Infra: docker-compose, nginx (path adapter), Caddy for TLS
-- Tests: pytest (289 offline tests), Playwright + Vitest on the UI
+- Tests: pytest (397 offline tests), Playwright + Vitest on the UI
 
 ## Repository layout
 
@@ -234,7 +235,7 @@ oxy/
 ## Running the tests
 
 ```bash
-make test-core          # 289 offline unit tests, a few seconds
+make test-core          # 397 offline unit tests, a few seconds
 make test-integration   # requires a running engine + live external services
 ```
 
@@ -265,7 +266,7 @@ The dev stack ships local defaults in `docker-compose.yml`; `packages/engine/.en
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE).
+Apache License 2.0: [LICENSE](LICENSE) holds the license text unchanged, [NOTICE](NOTICE) the copyright.
 
 ## Authors
 

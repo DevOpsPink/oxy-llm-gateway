@@ -73,8 +73,8 @@ def test_cloud_agent_budget_blocks(monkeypatch):
         headers={"Authorization": "Bearer oxy_live_test"},
         json={"model": "gpt-4o", "messages": [{"role": "user", "content": "hi"}]},
     )
-    assert r.status_code == 403
-    assert r.json()["error"]["code"] in ("free_plan_limit_reached", "free_plan_limit_reached")
+    # No tier caps requests: an organization past 100K requests a month is not refused for it.
+    assert not (r.status_code == 403 and "free_plan_limit_reached" in r.text)
 
 
 def test_local_agent_zero_prompt_logging(monkeypatch, mock_supabase):

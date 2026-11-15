@@ -10,7 +10,8 @@ from core import resources
 from dependencies import CacheData, build_api_key_dependency, get_user_and_key_from_api_key
 
 router = APIRouter(prefix="/v1", tags=["requests"])
-api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key)
+# The dashboard calls these routes with its session; scripts with an Oxy API key.
+api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key, allow_session=True)
 
 
 @router.get("/requests")
@@ -56,7 +57,7 @@ async def list_requests(
         if status:
             query = query.eq("status", status)
 
-        result = query.execute()
+        result = await query.execute()
         data = result.data or []
 
         return {"items": data}

@@ -100,13 +100,15 @@ else:
 # If you change these, update the plan limits page AND db/schema.sql.
 #
 # - Free: default for new organizations
-# - Starter / Growth / Business: progressively higher quotas
-# - Enterprise: no request cap
+# - Starter / Growth / Business: progressively higher project, agent and
+#   team-member caps
+# - Enterprise: no caps
 # ============================================================================
 
+# No tier caps requests: budgets cap spend. A tier sets project, agent and
+# team-member caps.
 PLAN_LIMITS = {
     "free": {
-        "requests": 100_000,      # 100K/mo
         "projects": 1,
         "agents": 3,
         "team_members": 1,
@@ -114,7 +116,6 @@ PLAN_LIMITS = {
         "support": "community",
     },
     "starter": {
-        "requests": 500_000,      # 500K/mo
         "projects": 5,
         "agents": 10,
         "team_members": 3,
@@ -122,7 +123,6 @@ PLAN_LIMITS = {
         "support": "email_48h",
     },
     "growth": {
-        "requests": 2_000_000,    # 2M/mo
         "projects": 20,
         "agents": 50,
         "team_members": 10,
@@ -130,7 +130,6 @@ PLAN_LIMITS = {
         "support": "priority_24h",
     },
     "business": {
-        "requests": 10_000_000,   # 10M/mo
         "projects": None,         # Unlimited
         "agents": None,           # Unlimited
         "team_members": 50,
@@ -138,7 +137,6 @@ PLAN_LIMITS = {
         "support": "slack_dedicated",
     },
     "enterprise": {
-        "requests": None,         # Unlimited
         "projects": None,
         "agents": None,
         "team_members": None,

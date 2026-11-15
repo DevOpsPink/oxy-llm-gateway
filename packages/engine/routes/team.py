@@ -453,9 +453,12 @@ async def accept_team_invite(
 ):
     """
     Accept team invitation.
-    
-    SECURITY: Uses cryptographically secure token validation.
+
+    Not wired in this release: fn_accept_team_invite, which this calls, is not in
+    db/schema.sql, so every call failed with 500. It answers 501 until accepting an
+    invitation exists end to end (token, the invitee's email, the membership role).
     """
+    raise HTTPException(status_code=501, detail="Accepting team invitations is not available in this release.")
     try:
         # Call database function to accept invite
         res = await resources.http_client.post(

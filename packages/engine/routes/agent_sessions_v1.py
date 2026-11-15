@@ -99,7 +99,7 @@ async def get_agent_session(
         timeline_res = await resources.http_client.get(
             f"{SUPABASE_URL}/rest/v1/request_logs",
             params={
-                "agent_session_id": f"eq.{session_id}",
+                "session_id": f"eq.{session_id}",  # request_logs has session_id; agent_session_id never existed
                 "select": "id,created_at,model,provider,status,cost_usd",
                 "order": "created_at.desc",
                 "limit": "20",

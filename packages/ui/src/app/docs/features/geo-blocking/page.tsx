@@ -61,17 +61,22 @@ export default function GeoBlockingDocs() {
         <h2 className="text-xl font-bold text-slate-900 mb-4">Configuration (deployment-managed)</h2>
         <GlassCard>
           <div className="p-6">
-            <CodeBlock 
-              language="json"
-              code={`// Env-based, header/IP best-effort
+            <CodeBlock
+              language="bash"
+              code={`# Engine environment; geo-blocking is off by default
 ENABLE_GEO_BLOCKING=true
-GEO_BLOCKED_COUNTRIES=KP,IR,SY,CU
-GEO_BLOCKED_REGIONS=""         // optional
-GEO_FAIL_OPEN_ON_UNKNOWN=true  // allow+log when country missing
-GEO_ENABLE_IP_LOOKUP=false     // opt-in fallback when headers absent
-GEO_BLOCK_STATUS_CODE=451      // 451 by default; 403 supported`}
+GEO_BLOCKED_COUNTRIES=KP,IR,SY,CU  # this list is also the default when unset
+GEO_BLOCKED_REGIONS=               # optional; matched against the X-Region-Code header
+GEO_FAIL_OPEN_ON_UNKNOWN=true      # allow + log when no country is found
+GEO_ENABLE_IP_LOOKUP=false         # opt-in: look up the client IP at ip-api.com when no header
+GEO_BLOCK_STATUS_CODE=451          # 451 by default; any status code, e.g. 403`}
             />
             <p className="text-xs text-slate-600 mt-4">
+              The country comes from the first of these headers: CF-IPCountry, X-Country-Code, X-Geo-Country,
+              X-Appengine-Country. The engine reads them as received and does not check which proxy set them.
+              /health and /metrics are never blocked.
+            </p>
+            <p className="text-xs text-slate-600 mt-2">
               IP/header-based signal only. Operators must maintain the list; this is not sanctions or export-compliance advice. VPNs/proxies may bypass detection.
             </p>
           </div>
@@ -97,7 +102,8 @@ GEO_BLOCK_STATUS_CODE=451      // 451 by default; 403 supported`}
 }`}
             />
             <p className="text-xs text-slate-600 mt-4">
-              Status code defaults to 451. Unknown country → allow + log by default; set GEO_FAIL_OPEN_ON_UNKNOWN=false to block unknown.
+              Status code defaults to 451. Unknown country → allow + log by default; set GEO_FAIL_OPEN_ON_UNKNOWN=false to block unknown
+              (country unknown, reason country_unknown). A blocked region answers reason region_blocked with an extra region field.
             </p>
           </div>
         </GlassCard>

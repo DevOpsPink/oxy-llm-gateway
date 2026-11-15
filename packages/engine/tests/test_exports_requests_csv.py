@@ -39,7 +39,7 @@ def build_app(fake_rows):
         def limit(self, *args, **kwargs):
             return self
 
-        def execute(self):
+        async def execute(self):  # the route awaits it, as the real client's
             return type("R", (), {"data": self.rows})
 
     class FakeTable:
@@ -60,6 +60,17 @@ def build_app(fake_rows):
 
     exp.resources.supabase = FakeSupabase(fake_rows)  # type: ignore
     return app
+
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _restore_resources():
+    from core import resources
+    saved = (resources.supabase, resources.http_client)
+    yield
+    resources.supabase, resources.http_client = saved
 
 
 def test_exports_csv_basic_headers_and_rows():

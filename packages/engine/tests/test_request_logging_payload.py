@@ -20,6 +20,12 @@ class _FakeTable:
         self.inserted = payload
         return self
 
+    def upsert(self, payload):
+        # record_request writes with a client-side id as an upsert (a retry after a
+        # lost response must not create a second row).
+        self.inserted = payload
+        return self
+
     def execute(self):
         return _FakeResponse()
 

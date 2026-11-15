@@ -13,7 +13,8 @@ from dependencies import CacheData, build_api_key_dependency, get_user_and_key_f
 from core.audit import log_admin_event
 
 router = APIRouter(prefix="/v1", tags=["guardrails"])
-api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key)
+# The dashboard calls these routes with its session; scripts with an Oxy API key.
+api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key, allow_session=True)
 
 
 class GuardrailsUpdate(BaseModel):
@@ -21,8 +22,8 @@ class GuardrailsUpdate(BaseModel):
     auto_suspend_on_cost_spikes: bool | None = None
 
 
-def _get_org_guardrails(org_id: str):
-    result = (
+async def _get_org_guardrails(org_id: str):
+    result = await (
         resources.supabase.table("organizations")
         .select(
             "status, suspended_until, suspend_reason, paused, auto_suspend_on_cost_spikes, last_paused_at, last_pause_reason"
@@ -42,7 +43,7 @@ async def get_guardrails(
     key_data: CacheData = Depends(api_key_dependency),
 ):
     org_id = key_data["organization_id"]
-    return _get_org_guardrails(org_id)
+    return await _get_org_guardrails(org_id)
 
 
 @router.post("/guardrails")
@@ -51,7 +52,7 @@ async def update_guardrails(
     key_data: CacheData = Depends(api_key_dependency),
 ):
     org_id = key_data["organization_id"]
-    current = _get_org_guardrails(org_id)
+    current = await _get_org_guardrails(org_id)
 
     updates = {}
     if payload.paused is not None:
@@ -65,14 +66,14 @@ async def update_guardrails(
         updates["auto_suspend_on_cost_spikes"] = payload.auto_suspend_on_cost_spikes
 
     if not updates:
-        return _get_org_guardrails(org_id)
+        return await _get_org_guardrails(org_id)
 
     try:
-        resources.supabase.table("organizations").update(updates).eq("id", org_id).execute()
+        await resources.supabase.table("organizations").update(updates).eq("id", org_id).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to update guardrails") from e
 
-    new_state = _get_org_guardrails(org_id)
+    new_state = await _get_org_guardrails(org_id)
     # Best-effort cache refresh so the control hook sees the change immediately
     try:
         await cache_org_status(

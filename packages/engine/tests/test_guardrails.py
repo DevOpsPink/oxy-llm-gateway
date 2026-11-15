@@ -22,7 +22,7 @@ class FakeTable:
     def limit(self, _n):
         return self
 
-    def execute(self):
+    async def execute(self):  # the engine's PostgREST client is async
         data = [r for r in self.rows if all(r.get(k) == v for k, v in self.filters.items())]
         return SimpleNamespace(data=data)
 

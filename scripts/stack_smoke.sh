@@ -6,7 +6,8 @@
 # 2. a browser origin passes the adapter's CORS preflight;
 # 3. a magic link is sent, lands in Mailpit, and GoTrue accepts it;
 # 4. a password sign-up is onboarded and receives an Oxy API key;
-# 5. that key gets "pong from Oxy Gateway" through /v1/chat/completions.
+# 5. every engine route the dashboard reads answers that user's session;
+# 6. the key gets "pong from Oxy Gateway" through /v1/chat/completions.
 #
 # Tokens stay in shell variables and reach curl on stdin, never on its command line.
 set -euo pipefail
@@ -77,6 +78,24 @@ OXY_API_KEY="$(printf 'header = "Authorization: Bearer %s"\n' "$ACCESS_TOKEN" | 
   -H "X-CSRF-Token: $CSRF" -b "csrf_token=$CSRF" -H 'Content-Type: application/json' \
   --data "{\"full_name\":\"Smoke Test\",\"email\":\"$USER_EMAIL\"}" | json "d.get('api_key','')")"
 case "$OXY_API_KEY" in oxy_*) echo "onboarded; got an Oxy API key" ;; *) fail "onboarding returned no Oxy API key" ;; esac
+
+step "the dashboard's API answers a signed-in session"
+# Every engine route a dashboard page reads, called the way the page calls it:
+# with the user's session, not an Oxy API key. A 401 or 500 here is a broken page.
+ORG_ID="$(printf 'header = "Authorization: Bearer %s"\n' "$ACCESS_TOKEN" | curl_h "$API_URL/organizations" | json "d[0]['id']")"
+PAGES_FAILED=0
+for path in \
+  /management/status /management/projects /management/keys /management/stats /management/credits/referral-link \
+  /organizations "/add-ons/catalog?organization_id=$ORG_ID" "/auth/sso/status/$ORG_ID" /billing/subscription-status \
+  "/v1/audit/logs?limit=5" /v1/requests /v1/attribution/summary /v1/billing/overview /v1/guardrails \
+  /v1/notifications/settings /v1/webhooks /v1/org /v1/privacy /v1/providers/config /v1/setup/status \
+  /v1/intelligence/overview /v1/intelligence/anomalies /v1/intelligence/security-score /v1/intelligence/cost-insights \
+  /v1/exports/requests.csv /v1/cost-optimizer/recommendations /v1/team /v1/prompts/ /v1/agents; do
+  code="$(printf 'header = "Authorization: Bearer %s"\n' "$ACCESS_TOKEN" | curl_h -o /dev/null -w '%{http_code}' "$API_URL$path")"
+  if [ "$code" != 200 ]; then echo "  $path -> HTTP $code"; PAGES_FAILED=$((PAGES_FAILED + 1)); fi
+done
+[ "$PAGES_FAILED" = 0 ] || fail "$PAGES_FAILED dashboard routes refused a signed-in session"
+echo "every route the dashboard reads answers the session"
 
 step "request through the gateway"
 REPLY="$(printf 'header = "Authorization: Bearer %s"\n' "$OXY_API_KEY" | curl_h -X POST "$API_URL/v1/chat/completions" \

@@ -1402,7 +1402,7 @@ export default function DashboardPage() {
             ) : (
               /* Traditional input for EDITING existing projects */
               <div className="space-y-2">
-                <Label htmlFor="project-budget">Monthly Budget Limit ($)</Label>
+                <Label htmlFor="project-budget">Budget limit, total spend ($)</Label>
                 <div className="relative">
                     <span className="absolute left-3 top-2.5 text-slate-500 pointer-events-none" aria-hidden="true">$</span>
                     <Input

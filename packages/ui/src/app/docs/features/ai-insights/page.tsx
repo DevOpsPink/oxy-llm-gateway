@@ -1,13 +1,13 @@
 'use client'
 
 /**
- * 🧠 AI INSIGHTS DOCUMENTATION
+ * AI INSIGHTS DOCUMENTATION
  * =============================
  */
 
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Brain, CheckCircle2, ArrowRight, Copy, AlertTriangle, TrendingUp } from 'lucide-react'
+import { Brain, CheckCircle2, ArrowRight, Copy, AlertTriangle } from 'lucide-react'
 import { useState } from 'react'
 
 function GlassCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -52,7 +52,7 @@ export default function AIInsightsDocs() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-slate-900">AI Insights</h1>
-            <p className="text-slate-500">Real-time anomaly detection. Know before problems happen.</p>
+            <p className="text-slate-500">Rule-based anomaly flags, cost totals, a spend projection and a security score. Advisory only.</p>
           </div>
         </div>
       </motion.div>
@@ -61,20 +61,24 @@ export default function AIInsightsDocs() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <GlassCard>
           <div className="p-6">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">What We Detect</h2>
+            <h2 className="text-xl font-bold text-slate-900 mb-4">Anomaly Rules</h2>
+            <p className="text-slate-600 mb-4">
+              The anomalies the API returns are rows of the <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">anomaly_alerts</code> table.
+              The rules that write them live in <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">workers/anomaly_detector.py</code> and
+              compare the last hour with a baseline. The dot shows the highest severity a rule can raise.
+            </p>
             <div className="grid sm:grid-cols-2 gap-4">
               {[
-                { title: 'Cost Spikes', desc: '10x normal spend rate', severity: 'high' },
-                { title: 'Unusual Patterns', desc: 'Off-hours activity, new endpoints', severity: 'medium' },
-                { title: 'Error Rates', desc: 'Sudden increase in failures', severity: 'high' },
-                { title: 'Latency Anomalies', desc: 'Response times 5x baseline', severity: 'medium' },
-                { title: 'Token Anomalies', desc: 'Requests using 10x normal tokens', severity: 'medium' },
-                { title: 'Model Drift', desc: 'Agent requesting different models', severity: 'low' },
+                { title: 'Cost Spike', desc: 'Last-hour spend above 3x the 7-day hourly average', severity: 'high' },
+                { title: 'Volume Spike', desc: 'Last-hour requests above 5x the 7-day hourly average', severity: 'high' },
+                { title: 'Budget Burn', desc: 'A project on pace to use up its budget within 24 hours', severity: 'critical' },
+                { title: 'DLP Rate', desc: 'Over 5% of last-hour requests flagged by DLP', severity: 'critical' },
+                { title: 'Session Burst', desc: 'More than 10 new agent sessions per minute over 5 minutes', severity: 'high' },
               ].map((item) => (
                 <div key={item.title} className="p-3 bg-slate-50 rounded-xl flex items-start gap-3">
                   <div className={`w-2 h-2 rounded-full mt-2 ${
-                    item.severity === 'high' ? 'bg-red-500' : 
-                    item.severity === 'medium' ? 'bg-amber-500' : 'bg-blue-500'
+                    item.severity === 'critical' ? 'bg-red-500' : 
+                    item.severity === 'high' ? 'bg-amber-500' : 'bg-blue-500'
                   }`} />
                   <div>
                     <div className="font-medium text-slate-900">{item.title}</div>
@@ -82,6 +86,15 @@ export default function AIInsightsDocs() {
                   </div>
                 </div>
               ))}
+            </div>
+            <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-800">
+                No service in <code>docker-compose.yml</code> runs these rules on a schedule, so the anomaly list stays
+                empty unless something writes <code>anomaly_alerts</code> rows. The compose stack&apos;s
+                <code> worker-cost-anomaly</code> and <code>worker-anomaly</code> services run separate checks that do not
+                write to this table.
+              </p>
             </div>
           </div>
         </GlassCard>
@@ -92,57 +105,78 @@ export default function AIInsightsDocs() {
         <h2 className="text-xl font-bold text-slate-900 mb-4">Get Insights</h2>
         <GlassCard>
           <div className="p-6">
+            <p className="text-slate-600 mb-4">
+              <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">GET /v1/intelligence/overview</code> takes an Oxy
+              API key or the dashboard&apos;s signed-in session. It returns the 10 newest anomaly rows, up to 5 models and 5 projects with their cost this month,
+              the month-to-date cost with a straight-line projection to month end, and the security score. It only reads.
+            </p>
             <CodeBlock 
               language="bash"
-              code={`curl http://localhost:8000/v1/intelligence/anomalies \\
-  -H "Authorization: Bearer oxy_sk_..."
+              code={`curl http://localhost:8000/v1/intelligence/overview \\
+  -H "Authorization: Bearer oxy_live_..."
 
 # Response
 {
   "anomalies": [
     {
-      "id": "anom_abc123",
-      "type": "cost_spike",
-      "severity": "high",
-      "detected_at": "2024-01-15T14:30:00Z",
-      "description": "Spend rate 15x higher than 7-day average",
-      "affected_agent": "agent_xyz",
-      "current_rate_usd": 45.00,
-      "baseline_rate_usd": 3.00,
-      "recommended_action": "Review agent activity and consider kill switch"
+      "id": "8f1e...",
+      "type": "budget_burn",
+      "severity": "critical",
+      "detected_at": "2026-11-15T14:30:00+00:00",
+      "description": "Project 'Support bot' will exhaust budget in 5.2 hours",
+      "project_id": "c2a4...",
+      "model": null,
+      "estimated_impact_usd": null
     }
-  ]
+  ],
+  "cost_insights": {
+    "top_models": [{ "model": "gpt-4.1-mini", "requests": 5120, "cost_usd": 61.2 }],
+    "top_projects": [{ "project_id": "c2a4...", "name": "Support bot", "cost_usd": 61.2, "requests": 5120 }],
+    "month_to_date_cost_usd": 61.2
+  },
+  "forecast": {
+    "month_to_date_cost_usd": 61.2,
+    "projected_end_of_month_cost_usd": 122.4
+  },
+  "security_score": {
+    "score": 88,
+    "grade": "B",
+    "details": [{ "key": "budgets", "label": "Budgets configured", "status": "ok", "points": 10 }],
+    "note": "Heuristic only; not a security certification.",
+    "last_calculated": "2026-11-15T14:31:02+00:00"
+  }
 }`}
             />
+            <p className="text-sm text-slate-500 mt-4">
+              The other routes under <code>/v1/intelligence</code> (<code>/anomalies</code>, <code>/anomalies/detect</code>,
+              <code> /anomalies/{'{id}'}</code>, <code>/cost-insights</code>, <code>/spend-forecast</code>,
+              <code> /security-score</code>) declare their
+              <code> request</code> argument without a type, so FastAPI reads it as a required query parameter: a normal
+              call gets a 422.
+            </p>
           </div>
         </GlassCard>
       </motion.div>
 
-      {/* Auto-actions */}
+      {/* Security score */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
         <GlassCard>
           <div className="p-6">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">Automatic Actions</h2>
+            <h2 className="text-xl font-bold text-slate-900 mb-4">Security Score</h2>
             <p className="text-slate-600 mb-4">
-              Configure automatic responses to anomalies:
+              A fixed table applied to your settings, starting at 100 and clamped to 0 to 100. It is a checklist, not an
+              assessment:
             </p>
             <CodeBlock 
               language="json"
               code={`{
-  "anomaly_rules": [
-    {
-      "type": "cost_spike",
-      "threshold": "10x",
-      "action": "alert",
-      "channels": ["slack", "email"]
-    },
-    {
-      "type": "cost_spike", 
-      "threshold": "100x",
-      "action": "suspend_project",
-      "auto_resume_after_minutes": 60
-    }
-  ]
+  "budgets":          "+10 if any project has a budget, -20 if none",
+  "dlp":              "+5 if DLP is enabled, -25 if not",
+  "privacy_mode":     "zero_prompt_logging +10, metadata_only +5, debug_full -15, other -10",
+  "key_rotation":     "oldest key <= 90 days +5, 91-180 days -5, older -15, unknown -10",
+  "rate_limits":      "+5 if a per-minute limit is set, -20 if not",
+  "response_caching": "+3 if enabled, -5 if not",
+  "grades":           "A >= 90, B >= 80, C >= 65, D >= 50, else F"
 }`}
             />
           </div>
@@ -163,4 +197,3 @@ export default function AIInsightsDocs() {
     </div>
   )
 }
-

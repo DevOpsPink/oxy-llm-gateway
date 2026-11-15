@@ -33,7 +33,7 @@ class TestPlanLimits:
         from routes.billing import PLAN_LIMITS
         
         starter = PLAN_LIMITS["starter"]
-        assert starter["requests"] == 500_000
+        assert "requests" not in starter  # no tier caps requests
         assert starter["projects"] == 5
         assert starter["team_members"] == 3
     
@@ -42,7 +42,7 @@ class TestPlanLimits:
         from routes.billing import PLAN_LIMITS
         
         growth = PLAN_LIMITS["growth"]
-        assert growth["requests"] == 2_000_000
+        assert "requests" not in growth
         assert growth["projects"] == 20
         assert growth["team_members"] == 10
     
@@ -51,7 +51,7 @@ class TestPlanLimits:
         from routes.billing import PLAN_LIMITS
         
         enterprise = PLAN_LIMITS["enterprise"]
-        assert enterprise["requests"] is None  # Unlimited
+        assert "requests" not in enterprise
         assert enterprise["projects"] is None
         assert enterprise["team_members"] is None
 

@@ -780,23 +780,22 @@
     notes: "Policy-driven credits; ensure env matches docs."
 
 - id: free-tier
-  label: Free Tier
+  label: Plan tiers
   landing:
     present: true
-    sections: ["Hero chips", "CTA", "FAQ"]
-    copy_snippet: "Free tier — ~100K/mo* (limits subject to change)."
+    sections: ["FAQ"]
+    copy_snippet: "Plan tiers cap projects, agents and team members; no tier caps requests."
   status: ga
   product_contract:
-    summary: Default quota of the free plan tier (about 100K requests/mo); operators can change it or assign another tier in the database.
+    summary: Plan tiers set project, agent and team-member caps; no tier caps requests (project budgets cap spend).
     scope: ["billing"]
     guarantees: []
   code_refs:
-    - packages/ui/src/app/page.tsx
+    - packages/engine/routes/billing.py
     - packages/engine/routes/proxy.py
-    - packages/engine/tests/test_free_plan_limits.py
+    - packages/engine/tests/test_request_quota.py
   tests:
-    - packages/engine/tests/test_free_plan_limits.py
-    - packages/engine/tests/integration/test_e2e_paths.py::test_cloud_agent_budget_blocks
+    - packages/engine/tests/test_request_quota.py
   docs:
     - docs/getting-started/quickstart.md
     - docs/getting-started/free-tier.md

@@ -52,7 +52,7 @@ export default function GuardrailsDocs() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Guardrails</h1>
-            <p className="text-slate-500">Set limits on actions, not just money</p>
+            <p className="text-slate-500">Organization kill switch and cost-spike auto-suspend</p>
           </div>
         </div>
       </motion.div>
@@ -64,25 +64,25 @@ export default function GuardrailsDocs() {
             <h2 className="text-xl font-bold text-slate-900 mb-4">Types of Guardrails</h2>
             <div className="space-y-4">
               {[
-                { 
-                  type: 'Rate Limits', 
-                  desc: 'Max requests per minute/hour/day',
-                  example: '100 requests/minute per agent'
+                {
+                  type: 'Kill switch (paused)',
+                  desc: 'Setting "paused": true suspends the whole organization. /v1/chat/completions then refuses its requests with 403 org_suspended until paused is set back to false.',
+                  example: 'paused: false by default'
                 },
-                { 
-                  type: 'Token Limits', 
-                  desc: 'Max tokens per request or session',
-                  example: '4096 tokens max per request'
+                {
+                  type: 'Cost-spike auto-suspend',
+                  desc: 'The cost anomaly worker checks every 5 minutes. When a project\'s spend in the last hour reaches 100x its 30-day hourly average and this flag is on, it suspends the organization (reason cost_spike) and the project.',
+                  example: 'auto_suspend_on_cost_spikes: true by default'
                 },
-                { 
-                  type: 'Action Limits', 
-                  desc: 'Max tool calls per session',
-                  example: '50 tool calls per session'
+                {
+                  type: 'Burst rate limit',
+                  desc: 'Requests per second per user on /v1/chat/completions. Over the limit: 429 RATE_LIMITED with retry_after 1.',
+                  example: 'BURST_LIMIT_PER_SECOND=10'
                 },
-                { 
-                  type: 'Time Limits', 
-                  desc: 'Max session duration',
-                  example: '30 minutes per session'
+                {
+                  type: 'Per-agent limits (stored, not enforced)',
+                  desc: 'POST /v1/agents saves max_tokens_per_request, max_requests_per_session and max_tool_calls_per_session on the agent. The gateway does not read them in this build.',
+                  example: 'defaults 4096 / 100 / 50'
                 },
               ].map((item) => (
                 <div key={item.type} className="p-4 bg-slate-50 rounded-xl">
@@ -105,29 +105,29 @@ export default function GuardrailsDocs() {
           <div className="p-6">
             <CodeBlock 
               language="json"
-              code={`// POST /v1/agents
+              code={`// GET  /v1/guardrails   reads the current state
+// POST /v1/guardrails   changes it; send only the fields to change
+// Both take an Oxy API key: Authorization: Bearer oxy_live_...
 {
-  "name": "Customer Support Bot",
-  "guardrails": {
-    "rate_limit": {
-      "requests_per_minute": 100,
-      "requests_per_hour": 1000
-    },
-    "token_limit": {
-      "max_tokens_per_request": 4096,
-      "max_tokens_per_session": 50000
-    },
-    "action_limit": {
-      "max_tool_calls_per_session": 50,
-      "max_file_operations": 10
-    },
-    "time_limit": {
-      "max_session_duration_minutes": 30
-    },
-    "on_limit_exceeded": "block"  // "block" | "alert" | "throttle"
-  }
+  "paused": true,
+  "auto_suspend_on_cost_spikes": true
+}
+
+// Response (both methods): the organization's guardrail state
+{
+  "status": "suspended",
+  "suspended_until": null,
+  "suspend_reason": "manual_toggle",
+  "paused": true,
+  "auto_suspend_on_cost_spikes": true,
+  "last_paused_at": "2026-01-01T00:00:00+00:00",
+  "last_pause_reason": "manual_toggle"
 }`}
             />
+            <p className="text-xs text-slate-600 mt-4">
+              Each change is recorded in the admin audit log as guardrails.updated (best effort). Setting paused to false
+              sets the status back to active and clears suspended_until.
+            </p>
           </div>
         </GlassCard>
       </motion.div>
@@ -139,32 +139,44 @@ export default function GuardrailsDocs() {
             <h2 className="text-xl font-bold text-slate-900 mb-4">When a Guardrail is Triggered</h2>
             <CodeBlock 
               language="json"
-              code={`// HTTP 429 Too Many Requests
+              code={`// HTTP 403 Forbidden (organization paused or auto-suspended)
 {
   "error": {
-    "code": "GUARDRAIL_EXCEEDED",
-    "guardrail": "rate_limit",
-    "current": 101,
-    "limit": 100,
-    "window": "1 minute",
-    "retry_after_seconds": 45
+    "code": "org_suspended",
+    "message": "This organization is suspended and cannot accept new requests.",
+    "reason": "manual_toggle"
+  }
+}
+
+// HTTP 429 Too Many Requests (burst rate limit)
+{
+  "detail": {
+    "error": {
+      "code": "RATE_LIMITED",
+      "message": "Rate limit exceeded: 10 requests per second.",
+      "hint": "...",
+      "retry_after": 1,
+      "context": { "limit": 10, "window": "1 second" }
+    }
   }
 }`}
             />
+            <p className="text-xs text-slate-600 mt-4">
+              reason is cost_spike when the anomaly worker suspended the organization.
+            </p>
           </div>
         </GlassCard>
       </motion.div>
 
-      {/* Best practices */}
+      {/* Notes */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
           <h3 className="font-semibold text-emerald-800 mb-2 flex items-center gap-2">
-            <Zap className="h-5 w-5" /> Recommended Guardrails
+            <Zap className="h-5 w-5" /> Notes
           </h3>
           <ul className="space-y-2 text-sm text-emerald-700">
-            <li>• <strong>Customer-facing agents:</strong> 100 req/min, 4K tokens, 50 actions</li>
-            <li>• <strong>Internal agents:</strong> 500 req/min, 8K tokens, 200 actions</li>
-            <li>• <strong>Batch processing:</strong> No rate limit, 32K tokens, 1000 actions</li>
+            <li>• <strong>Organization-wide:</strong> paused applies to every project and agent of the organization. To stop one agent, use POST /v1/agents/&#123;agent_id&#125;/pause; requests that carry its X-Oxy-Agent-Id then get 403 agent_suspended.</li>
+            <li>• <strong>No automatic lift:</strong> a cost-spike suspension sets suspended_until (COST_SPIKE_SUSPEND_MINUTES, default 60), but the status stays suspended until paused is set to false.</li>
           </ul>
         </div>
       </motion.div>

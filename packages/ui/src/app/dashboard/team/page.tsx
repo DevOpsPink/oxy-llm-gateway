@@ -158,82 +158,6 @@ export default function TeamPage() {
     )
   }
 
-  const renderInvites = () => {
-    if (loading) return <Skeleton className="h-32 w-full" />
-    if (error) {
-      return (
-        <div className="text-sm text-red-600">
-          Could not load invites. <button className="underline" onClick={fetchTeam}>Retry</button>
-        </div>
-      )
-    }
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="email@example.com"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-          />
-          <Select value={inviteRole} onValueChange={setInviteRole}>
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="Role" />
-            </SelectTrigger>
-            <SelectContent>
-              {ROLE_OPTIONS.map((r) => (
-                <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={sendInvite} disabled={inviting || !inviteEmail.trim()}>
-            {inviting ? 'Sending…' : 'Send invite'}
-          </Button>
-        </div>
-        {inviteError && <div className="text-sm text-red-600">{inviteError}</div>}
-        <div className="text-sm font-semibold">Pending invites</div>
-        {(!data || !data.invites.length) && (
-          <div className="text-sm text-muted-foreground">No pending invites.</div>
-        )}
-        {data && data.invites.length > 0 && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Invited</TableHead>
-                <TableHead>Expires</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.invites.map((inv) => (
-                <TableRow key={inv.id}>
-                  <TableCell>{inv.email}</TableCell>
-                  <TableCell><Badge variant="outline">{inv.role}</Badge></TableCell>
-                  <TableCell>{inv.status}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {inv.created_at ? new Date(inv.created_at).toLocaleString() : '—'}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {inv.expires_at ? new Date(inv.expires_at).toLocaleString() : '—'}
-                  </TableCell>
-                  <TableCell>
-                    {inv.status === 'pending' && (
-                      <Button size="sm" variant="outline" onClick={() => revokeInvite(inv.id)}>
-                        Revoke
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-slate-50">
       <Header title="Team" />
@@ -253,7 +177,13 @@ export default function TeamPage() {
             <CardHeader>
               <CardTitle>Invites</CardTitle>
             </CardHeader>
-            <CardContent>{renderInvites()}</CardContent>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Invitations are not available in this release: an invitation could be sent but
+                not accepted. An operator adds a member directly, as a row in{' '}
+                <code className="text-xs">organization_members</code> (role owner, admin or developer).
+              </p>
+            </CardContent>
           </Card>
         </div>
       </main>

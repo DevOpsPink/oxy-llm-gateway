@@ -11,14 +11,15 @@ from core.audit import log_admin_event
 from dependencies import CacheData, build_api_key_dependency, get_user_and_key_from_api_key, get_supabase_headers
 
 router = APIRouter(prefix="/v1/team", tags=["team"])
-api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key)
+# The dashboard calls these routes with its session; scripts with an Oxy API key.
+api_key_dependency = build_api_key_dependency(lambda: get_user_and_key_from_api_key, allow_session=True)
 
-ALLOWED_ROLES = {"admin", "member", "developer", "viewer"}
+ALLOWED_ROLES = {"developer", "viewer"}  # the values team_invites.role accepts for an invite
 
 
 class InviteCreateRequest(BaseModel):
     email: str = Field(..., max_length=255)
-    role: str = Field("member")
+    role: str = Field("developer")  # team_invites.role allows owner, developer, viewer
 
     @field_validator("email")
     @classmethod

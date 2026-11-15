@@ -11,7 +11,7 @@ GOAL: Reduce OpenAI/Anthropic/Google API costs by caching identical requests.
 
 **Caching Strategy:**
 1. Only cache deterministic requests (temperature=0, no streaming)
-2. Cache key = SHA-256(provider + model + system_prompt + user_prompt + params)
+2. Cache key = SHA-256(organization + provider + model + messages + params)
 3. TTL = 7 days (balance freshness vs cost savings)
 4. Store compressed (gzip) to reduce Redis memory
 
@@ -94,7 +94,8 @@ class ResponseCache:
         provider: str,
         model: str,
         messages: list,
-        params: Dict[str, Any]
+        params: Dict[str, Any],
+        scope: str = "",
     ) -> str:
         """
         Generate a unique cache key for this request.
@@ -104,6 +105,8 @@ class ResponseCache:
         - model (gpt-4, claude-3, gemini-pro)
         - messages (entire conversation)
         - params (max_tokens, top_p, etc.)
+        - scope: the organization. One organization's cached answers are never
+          served to another (it would also tell them what the other asked).
         
         **Output:** SHA-256 hash (64 chars)
         """
@@ -115,6 +118,7 @@ class ResponseCache:
         
         # Create deterministic string
         cache_input = json.dumps({
+            'scope': scope,
             'provider': provider,
             'model': model,
             'messages': messages,
@@ -142,7 +146,8 @@ class ResponseCache:
         provider: str,
         model: str,
         messages: list,
-        params: Dict[str, Any]
+        params: Dict[str, Any],
+        scope: str = "",
     ) -> Optional[Dict[str, Any]]:
         """
         Try to retrieve a cached response.
@@ -154,7 +159,7 @@ class ResponseCache:
         if not self._should_cache(params):
             return None
         
-        cache_key = self._generate_cache_key(provider, model, messages, params)
+        cache_key = self._generate_cache_key(provider, model, messages, params, scope)
         
         try:
             cached_data = await self.redis.get(cache_key)
@@ -192,7 +197,8 @@ class ResponseCache:
         messages: list,
         params: Dict[str, Any],
         response: Dict[str, Any],
-        estimated_cost: float
+        estimated_cost: float,
+        scope: str = "",
     ):
         """
         Store a response in cache.
@@ -204,7 +210,7 @@ class ResponseCache:
         if not self._should_cache(params):
             return
         
-        cache_key = self._generate_cache_key(provider, model, messages, params)
+        cache_key = self._generate_cache_key(provider, model, messages, params, scope)
         
         try:
             # Prepare cache data

@@ -8,8 +8,8 @@
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { 
-  Bell, DollarSign, Mail, CheckCircle2, 
-  ArrowRight, Copy, AlertTriangle, Zap
+  Bell, Mail, CheckCircle2,
+  ArrowRight, Copy, AlertTriangle
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -55,7 +55,7 @@ export default function BudgetsDocs() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Budgets & Alerts</h1>
-            <p className="text-slate-500">Set limits. Get notified. Help avoid overspending.</p>
+            <p className="text-slate-500">A spend cap per project, checked before each request reaches a provider.</p>
           </div>
         </div>
       </motion.div>
@@ -66,14 +66,17 @@ export default function BudgetsDocs() {
           <div className="p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-4">Alert Thresholds</h2>
             <p className="text-slate-600 mb-4">
-              Oxy automatically sends alerts at key budget milestones:
+              A project&apos;s budget is a total spend cap in USD (<code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">projects.budget_limit</code>);
+              nothing resets it. Before a request reaches the provider, Oxy reserves its estimated cost atomically in Redis,
+              then settles the reservation at the real cost. After a reservation succeeds, Oxy compares the project&apos;s
+              spend with the cap and sends an alert at each threshold it has reached:
             </p>
             
             <div className="space-y-3">
               {[
-                { threshold: '80%', color: 'bg-amber-100 text-amber-700', desc: 'Warning — Time to review usage' },
-                { threshold: '95%', color: 'bg-orange-100 text-orange-700', desc: 'Critical — Take action now' },
-                { threshold: '100%', color: 'bg-red-100 text-red-700', desc: 'Budget exhausted — Requests blocked' },
+                { threshold: '80%', color: 'bg-amber-100 text-amber-700', desc: 'Warning' },
+                { threshold: '95%', color: 'bg-orange-100 text-orange-700', desc: 'Urgent' },
+                { threshold: '100%', color: 'bg-red-100 text-red-700', desc: 'Cap reached: a request whose reservation would pass it gets 402' },
               ].map((item) => (
                 <div key={item.threshold} className="flex items-center gap-4 p-3 bg-slate-50 rounded-xl">
                   <span className={`px-3 py-1 rounded-lg text-sm font-bold ${item.color}`}>
@@ -83,6 +86,11 @@ export default function BudgetsDocs() {
                 </div>
               ))}
             </div>
+            <p className="text-sm text-slate-500 mt-4">
+              At most one alert per threshold per project in 24 hours. Projects with a budget of 0 (no cap) get no alerts.
+              Budgets are per project: agents have budget fields in the schema, but the request path does not enforce them,
+              and no plan tier caps requests.
+            </p>
           </div>
         </GlassCard>
       </motion.div>
@@ -93,7 +101,10 @@ export default function BudgetsDocs() {
         <GlassCard>
           <div className="p-6">
             <p className="text-slate-600 mb-4">
-              Set a project's budget (a total in USD, 0 for no cap). The call takes a dashboard session token, not an API key:
+              In the dashboard, edit the project on the Control Plane (<code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">/dashboard</code>). Over the API, set a
+              project&apos;s budget (a total in USD, 0 for no cap) as an admin or owner of its organization. The call takes a
+              dashboard session token and the CSRF double-submit (the <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">X-CSRF-Token</code> header
+              must match the <code className="bg-slate-100 px-1.5 py-0.5 rounded text-sm">csrf_token</code> cookie), not an API key:
             </p>
             <CodeBlock 
               language="bash"
@@ -122,7 +133,7 @@ export default function BudgetsDocs() {
                 {
                   action: '503',
                   title: 'budget_unavailable',
-                  desc: 'If the budget cannot be checked (Redis down), the request is refused rather than served unchecked, and recorded.',
+                  desc: 'If the budget cannot be checked (Redis down), the request is refused rather than served unchecked (with Retry-After: 5), and recorded in request_logs.',
                 },
               ].map((item) => (
                 <div key={item.action} className="p-4 rounded-xl border border-slate-200 bg-slate-50">
@@ -144,14 +155,13 @@ export default function BudgetsDocs() {
           <div className="p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-4">Notification Channels</h2>
             <p className="text-slate-600 mb-4">
-              Configure where to receive budget alerts:
+              Where budget alerts go:
             </p>
             
             <div className="grid sm:grid-cols-2 gap-4">
               {[
-                { icon: Mail, title: 'Email', desc: 'Sent to the project owner when SMTP is configured.', status: 'Optional' },
-                { icon: Bell, title: 'Slack / Discord', desc: 'Best-effort alerts via webhooks you provide.', status: 'Best-effort' },
-                { icon: Zap, title: 'Webhook', desc: 'POST to your endpoint.', status: 'Best-effort' },
+                { icon: Mail, title: 'Email', desc: 'Sent through SendGrid to the user who created the API key. Needs EMAIL_ENABLED=true and SENDGRID_API_KEY in the engine environment; the sender is EMAIL_FROM. BUDGET_ALERTS_ENABLED=false turns alerts off.', status: 'Off by default' },
+                { icon: Bell, title: 'Slack / Discord / Zapier', desc: 'Not sent for budget alerts: the request path does not pass the organization to the alert sender, so these channels are skipped.', status: 'Not sent' },
               ].map((item) => (
                 <div key={item.title} className="p-4 bg-slate-50 rounded-xl">
                   <div className="flex items-center gap-3 mb-2">
@@ -174,8 +184,10 @@ export default function BudgetsDocs() {
           <div>
             <h3 className="font-semibold text-amber-800 mb-1">Cost Anomaly Detection</h3>
             <p className="text-sm text-amber-700">
-              The cost-anomaly worker also looks for unusual spending (e.g., 10x the usual rate) and alerts.
-              With auto-suspend on, a critical spike suspends the organization. Heuristic and best-effort.
+              Separately, the cost-anomaly worker checks every 5 minutes each project&apos;s spend in the last hour against its
+              30-day hourly average, and logs a cost_anomaly_detected event from 5x upward. At 100x, if the organization&apos;s
+              auto_suspend_on_cost_spikes is on (the default), it suspends the organization, and its requests get
+              403 org_suspended. A project with no spend history is never flagged. Heuristic and best-effort.
             </p>
           </div>
         </div>

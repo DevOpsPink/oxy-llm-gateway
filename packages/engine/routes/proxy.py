@@ -12,7 +12,6 @@ Features:
 - Budget management with atomic Redis operations
 - Response caching for cost optimization
 - Rate limiting (per-minute + burst protection)
-- Plan request limit per organization
 - Dead key detection
 - Audit logging
 - 🆕 Tool/Function call support with DLP scanning
@@ -211,6 +210,8 @@ async def _resolve_org_paused(organization_id: str, key_data: CacheData) -> bool
                 .limit(1)
                 .execute()
             )
+            if hasattr(res, "__await__"):  # the engine's client is async; test fakes may not be
+                res = await res
             rows = getattr(res, "data", []) or []
             if rows:
                 paused = bool(rows[0].get("paused", False))
@@ -1251,7 +1252,7 @@ async def chat_completions_proxy(
     Flow:
     1. Extract API key metadata (user_id, project_id, budget_limit)
     2. Burst rate limiting (10 req/sec)
-    3. Plan request limit (per organization)
+    3. Organization suspension
     4. Agent and session checked against the key's organization; kill switch
     5. DLP, then budget reservation (atomic Redis Lua; refused when it cannot be checked)
     6. Parse request body
@@ -1284,7 +1285,6 @@ async def chat_completions_proxy(
     if key_data.get("privacy_mode") is None:
         key_data["privacy_mode"] = await _load_org_privacy_mode(organization_id)
 
-    plan_tier = key_data.get('plan_tier', 'free')
     org_status_payload = await get_org_status(organization_id)
     if org_status_payload.get("status") == "suspended":
         return JSONResponse(
@@ -1299,34 +1299,14 @@ async def chat_completions_proxy(
         )
     org_paused = bool(key_data.get("org_paused", False) or org_status_payload.get("status") == "suspended")
 
-    free_plan_check_enabled = not org_paused and (
-        getattr(resources, "http_client", None) is not None
-        or get_org_monthly_usage.__module__ != "routes.usage"
-    )
-    # Free plan monthly request limit enforcement (per org, per calendar month UTC)
-    if plan_tier == "free" and free_plan_check_enabled:
-        try:
-            current_usage = await get_org_monthly_usage(organization_id)
-            if current_usage >= 100_000:
-                return JSONResponse(
-                    status_code=403,
-                    content={
-                        "error": {
-                            "code": "free_plan_limit_reached",
-                            "message": "Free plan limit (100K requests/month) exceeded. An operator can raise the plan tier.",
-                        }
-                    },
-                )
-        except HTTPException:
-            raise
-        except Exception as e:
-            log.error("free_plan_limit_check_failed", organization_id=organization_id, error=str(e))
-    
+    # No plan request quota on the request path: a self-hosted gateway does not cap
+    # an organization's requests by a plan tier. Budgets (below) are the spend
+    # control; monthly usage is still counted for the dashboard.
+
     # Burst rate limiting
     await check_burst_rate_limit(request, user_id)
     
-    # No subscription lookup on the request path: plan limits come from the
-    # organization (above), and request logs carry no subscription.
+    # No subscription lookup on the request path; request logs carry no subscription.
     subscription_id = None
 
     # Parse request body
@@ -1711,7 +1691,8 @@ async def chat_completions_proxy(
                 provider=provider_name,
                 model=model,
                 messages=messages,
-                params=body_dict
+                params=body_dict,
+                scope=organization_id,
             )
         except Exception as cache_error:
             log.warning(
@@ -2020,7 +2001,8 @@ async def chat_completions_proxy(
                         messages=messages,
                         params=body_dict,
                         response=response_data,
-                        estimated_cost=float(cost)
+                        estimated_cost=float(cost),
+                        scope=organization_id,
                     )
                 except Exception as cache_error:
                     log.warning(

@@ -51,7 +51,7 @@ def test_billing_overview_returns_fields():
     assert r.status_code == 200
     data = r.json()
     assert data["plan"] == "free"
-    assert data["free_plan_limit_per_month"] == 100000
+    assert data["free_plan_limit_per_month"] is None  # no tier caps requests
     assert data["free_plan_usage_this_month"] == 12345
     assert data["referral_code"] == "OXY-ABCDE"
     assert data["referral_credits_usd"] == 100.0
