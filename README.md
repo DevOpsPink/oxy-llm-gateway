@@ -269,10 +269,12 @@ Apache License 2.0. See [LICENSE](LICENSE).
 
 ## Authors
 
-Oxy was built by two co-authors:
+Oxy has two co-authors and maintainers, with an equal share in it. Both of us shaped every part of it, from the first idea to the architecture, and each of us brought a different side of the same decade in DevOps.
 
-- [Vladimir Mikhalev](https://heyvaldemar.com) ([heyvaldemar](https://github.com/heyvaldemar) on GitHub) — DevOps engineer behind heyvaldemar.com and its self-hosted Docker Compose and Kubernetes repositories.
-- [Tatiana Mikhaleva](https://devops.pink) ([DevOpsPink](https://github.com/DevOpsPink) on GitHub) — DevOps engineer behind devops.pink.
+- **Tatiana Mikhaleva** ([DevOpsPink](https://github.com/DevOpsPink), [devops.pink](https://devops.pink)), Docker Captain: the developer experience. How a team gets from `git clone` to its first working key with one `docker compose up`, the dashboard where a project owner sees spend, keys and every refusal, and the documentation that makes the gateway's rules obvious before they bite.
+- **Vladimir Mikhalev** ([heyvaldemar](https://github.com/heyvaldemar), [heyvaldemar.com](https://heyvaldemar.com)): the security model. What Oxy refuses and why, behind the budgets, DLP, the kill switch and the audit trail, and the proofs in CI that show each control holding, each one shown the bug it exists to catch.
+
+See [MAINTAINERS.md](MAINTAINERS.md).
 
 ## Status
 
