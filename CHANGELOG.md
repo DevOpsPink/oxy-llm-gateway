@@ -5,7 +5,7 @@
 ### Dependencies
 
 - The UI's unit tests run on Vitest 4 (4.1.12, with `@vitest/coverage-v8` and `@vitest/ui` at the same version and Vite 7.3). Coverage names source files only (`src/lib/**/*.{ts,tsx}`, `src/hooks/**/*.{ts,tsx}`): Vitest 4 reports every file `coverage.include` matches, and `src/lib` holds a Markdown guide. Dependabot checks the pnpm workspace from its root alone; listing `packages/ui` as well opened a second pull request for each update, without the lockfile.
-- Dependabot proposes patch and minor updates only, grouped per ecosystem, and `dependabot-automerge.yml` merges them once CI (the proofs and the devcontainer included) and CodeQL pass for the commit and every dependency moved is stated as patch or minor. Majors are held back until 2027-02-15; the README's "Dependencies" section lists them.
+- Dependabot proposes patch and minor updates only, once a release is seven days old, grouped per ecosystem, and `dependabot-automerge.yml` merges them once CI (the proofs and the devcontainer included) and CodeQL pass for the commit and every dependency moved is stated as patch or minor. Majors are held back until 2027-02-15; the README's "Dependencies" section lists them.
 
 ### Fixed
 

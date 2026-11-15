@@ -266,9 +266,9 @@ The dev stack ships local defaults in `docker-compose.yml`; `packages/engine/.en
 
 ## Dependencies
 
-Dependabot proposes patch and minor updates once a week, one grouped pull request per ecosystem: GitHub Actions, the engine's Python packages, the UI's npm packages and the Dockerfiles' base images. [`dependabot-automerge.yml`](.github/workflows/dependabot-automerge.yml) merges such a pull request once CI, with the proofs and the devcontainer, and CodeQL pass for its commit, and only when every dependency it moves is stated as a patch or minor update. The images pinned by digest in the compose files are checked each week by [`freshness.yml`](.github/workflows/freshness.yml).
+Dependabot proposes patch and minor updates once a week, once a release is seven days old, one grouped pull request per ecosystem: GitHub Actions, the engine's Python packages, the UI's npm packages and the Dockerfiles' base images. [`dependabot-automerge.yml`](.github/workflows/dependabot-automerge.yml) merges such a pull request once CI, with the proofs and the devcontainer, and CodeQL pass for its commit, and only when every dependency it moves is stated as a patch or minor update. The images pinned by digest in the compose files are checked each week by [`freshness.yml`](.github/workflows/freshness.yml).
 
-Major versions are not proposed: each is a migration, made by hand in its own pull request. Held back on 2026-11-15, to be reviewed on **2027-02-15**:
+Major versions are not proposed: each is a migration, made by hand in its own pull request. A known vulnerability is not left to them: CI runs `pip-audit` on the engine's requirements and `pnpm audit` on the UI's production dependencies (high and critical) on every push and pull request and every day, and fails when it finds one, whether its fix is a major version or not. Held back on 2026-11-15, to be reviewed on **2027-02-15**:
 
 - base images: Python 3.12 (3.15 is out) and Node 22 LTS (26 is out);
 - engine: `anthropic` 2, `redis` 8, `stripe` 17, `structlog` 26, and for development `pytest` 9, `pytest-asyncio` 1, `pytest-cov` 7, `black` 26, `isort` 9, `mypy` 2;

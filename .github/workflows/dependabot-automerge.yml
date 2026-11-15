@@ -98,14 +98,30 @@ jobs:
           fi
 
           # PATCH AND MINOR ONLY. Dependabot lists every dependency it moved in
-          # the commit message, each with its update type. Every one must say
-          # semver-minor or semver-patch: a major, or a type not stated, leaves
-          # the pull request to a person.
+          # the commit message's metadata block (from "updated-dependencies:" to
+          # "..."), each entry with its update type. Each entry is read on its
+          # own: it must carry exactly one update-type, and that one must be
+          # semver-minor or semver-patch. A major, a type not stated, or no
+          # entry at all leaves the pull request to a person.
           message="$(gh api "repos/$REPO/commits/$SHA" --jq '.commit.message')"
-          deps="$(grep -c '^- dependency-name: ' <<<"$message" || true)"
-          small="$(grep -cE '^  update-type: version-update:semver-(minor|patch)$' <<<"$message" || true)"
-          if [ "$deps" -eq 0 ] || [ "$small" -ne "$deps" ]; then
-            echo "::notice::#$pr moves $deps dependencies, $small of them stated as patch or minor: left for a person"
+          verdict="$(awk '
+            /^updated-dependencies:$/ { inblock = 1; next }
+            inblock && /^\.\.\.$/      { inblock = 0; next }
+            !inblock                   { next }
+            /^- dependency-name: /     { if (n && types[n] != 1) bad++; n++; types[n] = 0; small[n] = 0; next }
+            /^  update-type: /         { if (!n) { bad++; next }
+                                         types[n]++
+                                         if ($0 ~ /^  update-type: version-update:semver-(minor|patch)$/) small[n]++
+                                         else bad++
+                                         next }
+            END {
+              if (n && types[n] != 1) bad++
+              for (i = 1; i <= n; i++) if (small[i] != 1) bad++
+              printf "%d %d\n", n, bad
+            }' <<<"$message")"
+          read -r deps bad <<<"$verdict"
+          if [ "${deps:-0}" -eq 0 ] || [ "${bad:-1}" -ne 0 ]; then
+            echo "::notice::#$pr moves ${deps:-0} dependencies, and not every one is stated as a patch or minor update: left for a person"
             exit 0
           fi
 

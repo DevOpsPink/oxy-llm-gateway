@@ -1,6 +1,9 @@
 # Keeps the pinned GitHub Actions, the engine's and UI's dependencies and the
 # Dockerfiles' base images current.
 #
+# A release is proposed once it is seven days old (cooldown): a version pulled
+# or found compromised in its first days never reaches the merge below.
+#
 # Grouped, patch and minor only: one pull request per ecosystem per week, and
 # .github/workflows/dependabot-automerge.yml merges it once CI (proofs and the
 # devcontainer included) and CodeQL pass for its commit. Major versions are not
@@ -13,6 +16,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown: { default-days: 7 }
     groups:
       github-actions:
         patterns: ["*"]
@@ -27,6 +31,7 @@ updates:
     directory: /packages/engine
     schedule:
       interval: weekly
+    cooldown: { default-days: 7 }
     groups:
       engine:
         patterns: ["*"]
@@ -44,6 +49,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown: { default-days: 7 }
     groups:
       ui:
         patterns: ["*"]
@@ -60,6 +66,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown: { default-days: 7 }
     groups:
       base-images:
         patterns: ["*"]
