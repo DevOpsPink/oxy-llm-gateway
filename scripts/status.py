@@ -13,7 +13,8 @@ Writes:
 
     status.json             the window, the streak, the latest run's checks
                             (one per proof, one for the planted violations)
-                            and measurements
+                            and measurements, and `proofs`: the numbers of the
+                            latest run that uploaded proofs, with its run id
     badge-days.json         shields.io endpoint: green days in the window
     badge-checks.json       shields.io endpoint: the latest run's checks
 
@@ -109,6 +110,42 @@ def checks_and_measured(results, plants):
     return checks, measured
 
 
+def proof_numbers(results, plants, run):
+    """The proofs' numbers as data (for a page to read), with the run they come from."""
+    g = lambda name: results.get(name) or {}  # noqa: E731
+    b, d, k, t, v, f, s, keys, a = (g(n) for n in
+                                    ("budget", "dlp", "kill", "tenancy", "revoke", "failclosed", "surface", "keys", "audit"))
+    return {
+        "run_id": run["id"], "run_url": run["html_url"], "at": run["created_at"], "commit": run["head_sha"][:7],
+        "all_hold": bool(results) and all(r.get("ok") for r in results.values()),
+        "budget": {"holds": b.get("ok"), "requests": b.get("requests"), "concurrent": b.get("concurrent"),
+                   "budget_usd": b.get("budget_usd"), "served_by_provider": b.get("served_by_provider"),
+                   "max_affordable": b.get("max_affordable"), "overspend_usd": b.get("overspend_usd"),
+                   "served_after_sync_cycles": (b.get("after_sync_cycles") or {}).get("served"),
+                   "served_after_counter_lost": (b.get("after_counter_lost") or {}).get("served")},
+        "dlp": {"holds": d.get("ok"), "secret_types": d.get("secret_types"), "reached_provider": d.get("reached_provider")},
+        "kill": {"holds": k.get("ok"), "requests_after_kill": k.get("requests_after_kill"),
+                 "reached_provider_after_kill": k.get("reached_provider_after_kill"),
+                 "first_blocked_response_ms": k.get("first_blocked_response_ms"),
+                 "foreign_tenant_kill_status": k.get("foreign_tenant_kill_status")},
+        "tenancy": {"holds": t.get("ok"), "foreign_requests": t.get("foreign_requests"),
+                    "refused": t.get("refused_403"), "reached_provider": t.get("reached_provider")},
+        "revoke": {"holds": v.get("ok"), "requests_after_revoke": v.get("requests_after_revoke"),
+                   "refused": v.get("refused_401"), "reached_provider": v.get("reached_provider_after_revoke")},
+        "failclosed": {"holds": f.get("ok"), "redis_paused_seconds": f.get("redis_paused_seconds"),
+                       "guarded_requests": (f.get("budgeted") or {}).get("requests", 0) + (f.get("killed_session") or {}).get("requests", 0),
+                       "reached_provider": (f.get("budgeted") or {}).get("reached_provider", 0) + (f.get("killed_session") or {}).get("reached_provider", 0)},
+        "surface": {"holds": s.get("ok"), "functions_probed": s.get("functions_probed"),
+                    "callable_by_browser_roles": len(s.get("callable_by_browser_roles") or []) if s else None,
+                    "tables": s.get("tables"), "tables_without_rls": len(s.get("tables_without_rls") or []) if s else None,
+                    "policies_open_to_browser_roles": len(s.get("policies_open_to_browser_roles") or []) if s else None},
+        "keys": {"holds": keys.get("ok"), "tenant_keys_checked": keys.get("tenant_keys_checked"),
+                 "found_in_redis": len(keys.get("tenants_whose_key_is_in_redis") or []) if keys else None},
+        "audit": {"holds": a.get("ok"), "requests_sent": a.get("requests_sent"), "request_log_rows": a.get("request_log_rows")},
+        "plants": {"planted": len(plants), "caught": sum(1 for x in plants.values() if x.get("caught"))},
+    }
+
+
 def badge(label, message, color):
     return {"schemaVersion": 1, "label": label, "message": message, "color": color}
 
@@ -136,6 +173,13 @@ def main(out):
     latest = finished[-1] if finished else None
     got = proofs(repo, latest["id"]) if latest else None
     checks, measured = checks_and_measured(*got) if got else ([], [])
+    # The newest numbers: the latest run's, or the newest run before it that uploaded proofs.
+    numbers = None
+    for r in reversed(finished):
+        found = got if latest and r["id"] == latest["id"] else proofs(repo, r["id"])
+        if found:
+            numbers = proof_numbers(*found, r)
+            break
     passed = sum(1 for c in checks if c["state"] == "PASS")
     failed = sum(1 for c in checks if c["state"] == "FAIL")
 
@@ -159,6 +203,7 @@ def main(out):
             "checks": checks,
             "measured": measured,
         },
+        "proofs": numbers,
     }
     os.makedirs(out, exist_ok=True)
     with open(os.path.join(out, "status.json"), "w") as f:

@@ -168,3 +168,34 @@ jobs:
       - name: Stop the stack
         if: always()
         run: docker compose -f docker-compose.yml -f proofs/docker-compose.proofs.yml down -v
+
+  devcontainer:
+    name: Codespace devcontainer, smoke and the README's requests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js (for the devcontainer CLI)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      # The same .devcontainer/devcontainer.json a codespace starts from:
+      # docker-in-docker, then .devcontainer/start.sh (the stack with the fake
+      # provider, a fresh demo key). No codespace is created.
+      - name: Build and start the devcontainer
+        run: npx --yes @devcontainers/cli@0.90.0 up --workspace-folder .
+
+      - name: Smoke test and the README's three requests, inside it
+        run: npx --yes @devcontainers/cli@0.90.0 exec --workspace-folder . bash .devcontainer/check.sh
+
+      - name: Logs on failure
+        if: failure()
+        run: >
+          npx --yes @devcontainers/cli@0.90.0 exec --workspace-folder .
+          docker compose -f docker-compose.yml -f proofs/docker-compose.proofs.yml -f .devcontainer/compose.codespaces.yml
+          logs --no-color --tail 150

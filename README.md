@@ -58,6 +58,38 @@ To check the whole path without a provider key, run the same end-to-end test CI 
 bash scripts/stack_smoke.sh
 ```
 
+## Try it in a Codespace
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/heyvaldemar/oxy-llm-gateway?quickstart=1)
+
+The codespace (4 cores, 16 GB) builds and starts the whole stack with the recording fake provider from `proofs/` in place of a model provider, so no key is needed and no request leaves the codespace. On every start, `.devcontainer/start.sh` makes a fresh demo organization, project, API key and agent session and puts them in the terminal's environment; none of it is stored in the repository. The dashboard opens on port 3080: sign in as `$OXY_DEMO_EMAIL`, and the link arrives in Mailpit on port 8025.
+
+In a terminal:
+
+<!-- codespace-requests:start -->
+```bash
+# 1. A request through the gateway; the fake provider answers
+curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hello"}]}'
+
+# 2. The same request carrying a GitHub token, made up on the spot: DLP refuses it (451)
+curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"deploy with ghp_'"$(openssl rand -hex 18)"'"}]}'
+
+# 3. Kill the demo agent session, then send one more request in it (410)
+curl -s -w '\nHTTP %{http_code}\n' -X POST localhost:8000/v1/agent-sessions/$OXY_SESSION_ID/kill \
+  -H "Authorization: Bearer $OXY_API_KEY"
+curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+  -H "X-Oxy-Agent-Id: $OXY_AGENT_ID" -H "X-Oxy-Session-Id: $OXY_SESSION_ID" \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"next step"}]}'
+```
+<!-- codespace-requests:end -->
+
+A demonstration, not a measurement: CI builds this devcontainer and runs these requests as printed, plus the smoke test (job **Codespace devcontainer, smoke and the README's requests**), and the measured claims are the [Proofs](#proofs). The session stays killed: a second run of the third request answers 404 for the kill and 410 again.
+
 ## Architecture
 
 ```

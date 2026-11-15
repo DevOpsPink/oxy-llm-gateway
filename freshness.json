@@ -4,6 +4,7 @@
     "docker-compose.yml",
     "docker-compose.prod.yml",
     "proofs/docker-compose.proofs.yml",
+    ".devcontainer/compose.codespaces.yml",
     "Dockerfile.engine",
     "Dockerfile.ui",
     "examples/*/docker-compose.yml"

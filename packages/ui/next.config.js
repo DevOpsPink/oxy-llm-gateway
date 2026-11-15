@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Hosts the dev server answers besides localhost (the devcontainer's proxy
+  // origin in Codespaces); comma-separated, from .devcontainer/start.sh.
+  allowedDevOrigins: (process.env.NEXT_ALLOWED_DEV_ORIGINS || '').split(',').map((h) => h.trim()).filter(Boolean),
+
   // ============================================================================
   // PERFORMANCE OPTIMIZATIONS
   // ============================================================================

@@ -17,6 +17,10 @@ Oxy is a self-hosted LLM gateway: a FastAPI engine with an OpenAI-compatible `/v
 - CI runs the proofs, then plants the violation each proof exists to catch and requires that proof to fail.
 - A `status` branch (`.github/workflows/status.yml`) records the last 30 days of CI runs on main and the latest proofs, in the same shape as the other fleet repositories.
 
+### Try it
+
+- `.devcontainer/` opens the whole stack in GitHub Codespaces (or any devcontainer host) with the recording fake provider from `proofs/` in place of a model provider. Each start makes a fresh demo organization, API key and agent session; nothing is stored in the repository. The dashboard, auth and the engine share one forwarded port. CI builds the devcontainer and runs the smoke test and the README's three requests inside it.
+
 ### Security and behaviour
 
 - Database functions are executable by `postgres` and `service_role` only; the anon key and signed-in browser sessions can no longer call them. Row-level security is on for the admin audit log, notification settings, monthly usage and webhooks.
