@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Dependencies
+
+- The UI's unit tests run on Vitest 4 (4.1.12, with `@vitest/coverage-v8` and `@vitest/ui` at the same version and Vite 7.3). Coverage names source files only (`src/lib/**/*.{ts,tsx}`, `src/hooks/**/*.{ts,tsx}`): Vitest 4 reports every file `coverage.include` matches, and `src/lib` holds a Markdown guide. Dependabot checks the pnpm workspace from its root alone; listing `packages/ui` as well opened a second pull request for each update, without the lockfile.
+
 ## 1.0.1 — 2026-11-15
 
 ### License

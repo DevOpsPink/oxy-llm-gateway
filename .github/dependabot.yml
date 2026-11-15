@@ -23,9 +23,11 @@ updates:
     commit-message:
       prefix: deps
 
-  # pnpm workspace: the root manifest and the UI package share pnpm-lock.yaml.
+  # pnpm workspace: the root reads pnpm-workspace.yaml and updates packages/ui
+  # with pnpm-lock.yaml. Listing /packages/ui as well opened a second pull
+  # request for the same update, without the lockfile.
   - package-ecosystem: npm
-    directories: ["/", "/packages/ui"]
+    directory: /
     schedule:
       interval: weekly
     groups:

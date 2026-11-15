@@ -33,7 +33,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['src/lib/**', 'src/hooks/**'],
+      // Vitest 4 reports every file these patterns match (coverage.all is gone),
+      // so they name source files only: src/lib also holds a Markdown guide.
+      include: ['src/lib/**/*.{ts,tsx}', 'src/hooks/**/*.{ts,tsx}'],
       exclude: [
         'src/**/*.test.{ts,tsx}',
         'src/**/*.spec.{ts,tsx}',
