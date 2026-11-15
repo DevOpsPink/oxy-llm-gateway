@@ -176,13 +176,13 @@ Oxy speaks the OpenAI API on both sides, so an inference gateway like the second
 |---|---|
 | A budget is never overspent | 501 requests, 100 at a time, against a $0.05 budget: the provider served 35 completions, exactly what the budget buys; overspend $0. After the budget worker's sync cycles, 0 of 20 more were served, and 0 of 20 after Redis lost the spend counter |
 | DLP stops secrets before the provider | 11 secret types sent; 0 reached the provider; a clean control request did |
-| The kill switch stops a session | 165 requests started after `POST /v1/agent-sessions/{id}/kill` returned; 0 reached the provider; first blocked response 354 ms after the call. Another tenant's kill attempt answered 404 |
+| The kill switch stops a session | 184 requests started after `POST /v1/agent-sessions/{id}/kill` returned; 0 reached the provider; first blocked response 210 ms after the call. Another tenant's kill attempt answered 404 |
 | One tenant cannot act as another's agent | 25 requests carrying another tenant's agent and session ids: 25 refused with 403, 0 reached the provider, 0 logged against that tenant's agent |
 | A revoked key stops at once | a key used a moment before (so cached) is revoked: 10 of 10 next requests refused with 401, 0 reached the provider |
 | Without Redis, nothing unchecked gets through | Redis paused for 8.3 s: 4 requests against a budget answered 503, 4 in a killed session 410 (decided by Postgres); 0 of the 8 reached the provider. 2 requests needing neither check were served |
 | The browser cannot reach the engine's data | 27 database functions called through PostgREST with the public anon key and with a user's token: 0 callable; 41 tables, all with row-level security; 0 policies open to the browser roles |
 | No API key is stored in Redis | 10 tenants' keys checked against every name and value of 45 Redis keys: 0 found |
-| Every request is audited | 828 requests sent by the proofs above, 828 `request_logs` rows, refusals included |
+| Every request is audited | 843 requests sent by the proofs above, 843 `request_logs` rows, refusals included |
 
 `proofs/plant_violations.py` then plants, one at a time, the bug each proof exists for (a non-atomic reservation, the old spend ledger that reset every minute, DLP switched off, the kill state ignored, another tenant's ids accepted, a revoked key left in the cache, fail-open checks when Redis is down, the database functions and an open policy re-granted to the browser roles, the cache named by the raw key, audit writes dropped), requires that proof to fail, and restores the code. CI runs both on every push and daily (job **Proofs, each shown its planted violation**) and keeps the JSON; the branch `status` keeps the last 30 days.
 
@@ -192,7 +192,7 @@ python3 proofs/run_proofs.py
 python3 proofs/plant_violations.py
 ```
 
-Every number in this table comes from one run: CI run [43758846165](https://github.com/heyvaldemar/oxy-llm-gateway/actions/runs/43758846165) (job [Proofs, each shown its planted violation](https://github.com/heyvaldemar/oxy-llm-gateway/actions/runs/43758846165/job/132948834449)) on 2026-11-15, the push to `main` of the commit tagged [v1.0.1](https://github.com/heyvaldemar/oxy-llm-gateway/releases/tag/v1.0.1) (`ba488e9`), where all nine proofs held and all ten planted violations were caught. The stack is the default one, a single engine process on a GitHub-hosted runner. The latest run's numbers, with its run id, are in [`status.json`](https://github.com/heyvaldemar/oxy-llm-gateway/blob/status/status.json); they move a little from run to run (the kill switch's first refusal, the number of requests sent).
+Every number in this table comes from one run: CI run [43771948656](https://github.com/heyvaldemar/oxy-llm-gateway/actions/runs/43771948656) (job [Proofs, each shown its planted violation](https://github.com/heyvaldemar/oxy-llm-gateway/actions/runs/43771948656/job/132989581120)) on 2026-11-15, the push to `main` of the commit tagged [v1.0.2](https://github.com/heyvaldemar/oxy-llm-gateway/releases/tag/v1.0.2) (`ac6beea`), where all nine proofs held and all ten planted violations were caught. The stack is the default one, a single engine process on a GitHub-hosted runner. The latest run's numbers, with its run id, are in [`status.json`](https://github.com/heyvaldemar/oxy-llm-gateway/blob/status/status.json); they move a little from run to run (the kill switch's first refusal, the number of requests sent).
 
 ## Scope and honest limitations
 
