@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.0.2 — 2026-11-15
+
+A fix release: the dashboard's budget and project buttons work, deleting a project keeps its audit trail, and Dependabot keeps the dependencies current on its own.
 
 ### Fixed (dashboard)
 
