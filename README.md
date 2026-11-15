@@ -62,7 +62,7 @@ bash scripts/stack_smoke.sh
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/heyvaldemar/oxy-llm-gateway?quickstart=1)
 
-The codespace (4 cores, 16 GB) builds and starts the whole stack with the recording fake provider from `proofs/` in place of a model provider, so no key is needed and no request leaves the codespace. On every start, `.devcontainer/start.sh` makes a fresh demo organization, project, API key and agent session and puts them in the terminal's environment; none of it is stored in the repository. The dashboard opens on port 3080: sign in as `$OXY_DEMO_EMAIL`, and the link arrives in Mailpit on port 8025.
+The codespace (4 cores, 16 GB) builds and starts the whole stack with the recording fake provider from `proofs/` in place of a model provider, so no key is needed and no request leaves the codespace. The stack runs on secrets generated for the codespace on its first start, not on the published development defaults, and on every start `.devcontainer/start.sh` makes a fresh demo organization, project, API key and agent session and puts them in the terminal's environment; none of it is stored in the repository. The dashboard opens on port 3080: sign in as `$OXY_DEMO_EMAIL`, and the link arrives in Mailpit on port 8025.
 
 In a terminal:
 

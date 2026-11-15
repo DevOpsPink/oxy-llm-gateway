@@ -21,10 +21,16 @@ ROOT = Path(__file__).resolve().parent.parent
 API, SUPA = "http://localhost:8000", "http://localhost:8080"
 
 
-def compose_default(name):
+def setting(name):
+    """The stack's value: this codespace's .stack.env, else docker-compose.yml's default."""
+    env = ROOT / ".devcontainer" / ".stack.env"
+    if env.exists():
+        for line in env.read_text().splitlines():
+            if line.startswith(name + "="):
+                return line.split("=", 1)[1].strip()
     m = re.search(r"\$\{%s:-([^}]+)\}" % re.escape(name), (ROOT / "docker-compose.yml").read_text())
     if not m:
-        sys.exit("cannot find the %s default in docker-compose.yml" % name)
+        sys.exit("cannot find %s" % name)
     return m.group(1)
 
 
@@ -39,7 +45,7 @@ def call(method, url, body=None, headers=None):
 
 
 def main(out):
-    anon, service = compose_default("NEXT_PUBLIC_SUPABASE_ANON_KEY"), compose_default("SUPABASE_SERVICE_KEY")
+    anon, service = setting("NEXT_PUBLIC_SUPABASE_ANON_KEY"), setting("SUPABASE_SERVICE_KEY")
     run = secrets.token_hex(4)
     email = "demo-%s@example.com" % run
     st, body = call("POST", SUPA + "/auth/v1/signup", {"email": email, "password": secrets.token_urlsafe(24)}, {"apikey": anon})
@@ -65,11 +71,14 @@ def main(out):
     s = sess.get("session") or sess
     session_id = s.get("id") or s.get("session_id")
 
-    path = Path(out)
-    path.write_text("# Oxy demo, made by .devcontainer/demo_setup.py on this start; not a standing credential.\n"
-                    "export OXY_API_KEY=%s\nexport OXY_AGENT_ID=%s\nexport OXY_SESSION_ID=%s\nexport OXY_DEMO_EMAIL=%s\n"
-                    % (key, agent_id, session_id, email))
-    os.chmod(path, 0o600)
+    text = ("# Oxy demo, made by .devcontainer/demo_setup.py on this start; not a standing credential.\n"
+            "export OXY_API_KEY=%s\nexport OXY_AGENT_ID=%s\nexport OXY_SESSION_ID=%s\nexport OXY_DEMO_EMAIL=%s\n"
+            "export COMPOSE_FILE=%s\nexport COMPOSE_ENV_FILES=%s\n"
+            % (key, agent_id, session_id, email, os.environ.get("COMPOSE_FILE", ""), os.environ.get("COMPOSE_ENV_FILES", "")))
+    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # created 600, never readable by others
+    with os.fdopen(fd, "w") as f:
+        f.write(text)
+    os.chmod(out, 0o600)
     print("demo organization ready: %s, key %s..., agent session %s" % (email, key[:13], session_id))
 
 

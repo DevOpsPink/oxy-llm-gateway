@@ -10,15 +10,18 @@ if [ -n "${CODESPACE_NAME:-}" ] && [ -n "${GITHUB_CODESPACES_PORT_FORWARDING_DOM
 else
   ORIGIN="http://localhost:3080"
 fi
-host="${ORIGIN#*://}"
-export NEXT_PUBLIC_SITE_URL="$ORIGIN" NEXT_PUBLIC_SUPABASE_URL="$ORIGIN" NEXT_PUBLIC_API_URL="$ORIGIN/engine"
-export ALLOWED_ORIGINS="$ORIGIN,http://localhost:3000" API_EXTERNAL_URL="$ORIGIN"
-export GOTRUE_SITE_URL="$ORIGIN" GOTRUE_URI_ALLOW_LIST="$ORIGIN,$ORIGIN/auth/callback"
-export NEXT_ALLOWED_DEV_ORIGINS="${host%%:*}"
 
-compose=(docker compose -f docker-compose.yml -f proofs/docker-compose.proofs.yml -f .devcontainer/compose.codespaces.yml)
+# Docker inside the container may still be (re)starting when this runs.
+for _ in $(seq 1 90); do docker info >/dev/null 2>&1 && break; sleep 2; done
+docker info >/dev/null 2>&1 || { echo "Docker inside the container did not start" >&2; exit 1; }
+
+# This codespace's own secrets (first start) and URLs, in .devcontainer/.stack.env;
+# with COMPOSE_FILE and COMPOSE_ENV_FILES every docker compose command here uses them.
+python3 .devcontainer/stack_env.py "$ORIGIN"
+export COMPOSE_FILE="$PWD/docker-compose.yml:$PWD/proofs/docker-compose.proofs.yml:$PWD/.devcontainer/compose.codespaces.yml"
+export COMPOSE_ENV_FILES="$PWD/.devcontainer/.stack.env"
 echo "Starting the stack (the first start builds two images: a few minutes)..."
-"${compose[@]}" up -d --build --wait --wait-timeout 900
+docker compose up -d --build --wait --wait-timeout 900
 
 python3 .devcontainer/demo_setup.py "$HOME/.oxy-demo.env"
 for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do

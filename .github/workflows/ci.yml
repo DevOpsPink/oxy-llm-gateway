@@ -196,6 +196,7 @@ jobs:
       - name: Logs on failure
         if: failure()
         run: >
-          npx --yes @devcontainers/cli@0.90.0 exec --workspace-folder .
-          docker compose -f docker-compose.yml -f proofs/docker-compose.proofs.yml -f .devcontainer/compose.codespaces.yml
-          logs --no-color --tail 150
+          npx --yes @devcontainers/cli@0.90.0 exec --workspace-folder . bash -c
+          'tail -40 /tmp/dockerd.log 2>/dev/null; [ -f ~/.oxy-demo.env ] && . ~/.oxy-demo.env;
+          COMPOSE_FILE=docker-compose.yml:proofs/docker-compose.proofs.yml:.devcontainer/compose.codespaces.yml
+          docker compose logs --no-color --tail 150'

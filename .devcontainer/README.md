@@ -3,7 +3,14 @@
 `devcontainer.json` starts an Ubuntu container with Docker inside it, then
 `start.sh`, which brings up the whole stack with the recording fake provider
 from `proofs/` (no model provider, no key) and makes a fresh demo
-organization, project, API key and agent session with `demo_setup.py`. The
+organization, project, API key and agent session with `demo_setup.py`.
+
+The stack does not run on `docker-compose.yml`'s published development
+secrets here: `stack_env.py` generates the codespace's own JWT secret, anon
+and service-role keys, vault key and Postgres and Redis passwords on its first
+start, into `.devcontainer/.stack.env` (mode 600, ignored by git), which every
+`docker compose` command in the codespace reads. A forwarded port stays
+private unless its owner shares it; shared, it still carries no published key. The
 key and the session ids go to `~/.oxy-demo.env` in the container, which new
 terminals load; the demo user's password is random and written nowhere. A
 restart makes a new demo organization.

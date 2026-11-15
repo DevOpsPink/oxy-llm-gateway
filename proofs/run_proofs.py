@@ -106,7 +106,14 @@ def http(method, url, body=None, headers=None, timeout=60):
 
 
 def compose_default(name):
-    """Local defaults are in docker-compose.yml as ${NAME:-value}."""
+    """The stack's value: the environment, an env file compose reads (COMPOSE_ENV_FILES, as in
+    the devcontainer), else the local default in docker-compose.yml as ${NAME:-value}."""
+    if os.environ.get(name):
+        return os.environ[name]
+    for f in [x for x in os.environ.get("COMPOSE_ENV_FILES", "").split(",") if x]:
+        for line in Path(f).read_text().splitlines() if Path(f).exists() else []:
+            if line.startswith(name + "="):
+                return line.split("=", 1)[1].strip()
     text = (ROOT / "docker-compose.yml").read_text()
     m = re.search(r"\$\{%s:-([^}]+)\}" % re.escape(name), text)
     if not m:

@@ -65,3 +65,6 @@ localhost_*.html
 proofs/results.json
 proofs/plants.json
 proofs/plant-*.json
+
+# A codespace's own stack secrets (.devcontainer/stack_env.py)
+.devcontainer/.stack.env
