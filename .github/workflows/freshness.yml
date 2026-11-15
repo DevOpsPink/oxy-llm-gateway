@@ -1,0 +1,38 @@
+name: Freshness
+
+# Every image this repository pins by digest (compose files, Dockerfiles, the
+# proofs overlay, the examples) against what its tag resolves to now. A tag
+# that moved is a rebuilt image nobody here has run; the bump is made by hand
+# and passes the same checks as any other change. scripts/check-freshness.py
+# is the fleet's canon, byte for byte; what is particular to this repository
+# is in freshness.json. A release younger than three days is a warning.
+on:
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/check-freshness.py
+      - freshness.json
+
+permissions:
+  contents: read
+
+jobs:
+  freshness:
+    name: Pins that fell behind upstream
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: The check itself, with no network
+        run: python3 scripts/check-freshness.py selftest
+
+      - name: Compare every pin with what upstream has now
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/check-freshness.py

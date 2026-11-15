@@ -1,0 +1,11 @@
+{
+  "checks": ["images"],
+  "image_paths": [
+    "docker-compose.yml",
+    "docker-compose.prod.yml",
+    "proofs/docker-compose.proofs.yml",
+    "Dockerfile.engine",
+    "Dockerfile.ui",
+    "examples/*/docker-compose.yml"
+  ]
+}

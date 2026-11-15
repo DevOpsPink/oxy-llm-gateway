@@ -1,0 +1,199 @@
+# =============================================================================
+# PROMETHEUS CONFIGURATION FOR OXY ENGINE
+# =============================================================================
+# Scrape configuration for the engine, Redis, Caddy and host metrics.
+# =============================================================================
+
+global:
+  # How frequently to scrape targets
+  scrape_interval: 15s
+  
+  # How long to wait before timing out a scrape
+  scrape_timeout: 10s
+  
+  # How frequently to evaluate rules
+  evaluation_interval: 15s
+  
+  # External labels to attach to any time series or alerts
+  external_labels:
+    cluster: 'oxy-engine'
+    environment: 'production'
+    service: 'api-gateway'
+
+# Alertmanager configuration (optional but recommended)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - 'alertmanager:9093'  # Uncomment if using Alertmanager
+
+# Load rules once and periodically evaluate them
+rule_files:
+  # - "alerts/*.yml"  # Add alert rules here
+
+# Scrape configurations
+scrape_configs:
+  # ============================================================================
+  # PROMETHEUS SELF-MONITORING
+  # ============================================================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          component: 'prometheus'
+
+  # ============================================================================
+  # OXY ENGINE API (FastAPI)
+  # ============================================================================
+  - job_name: 'oxy-engine'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['engine:8000']
+        labels:
+          component: 'api'
+          language: 'python'
+          framework: 'fastapi'
+    metrics_path: '/metrics'
+    # Relabel to add custom labels
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'oxy-engine-api'
+
+  # ============================================================================
+  # REDIS EXPORTER
+  # ============================================================================
+  # Note: Requires redis_exporter sidecar container
+  # Add to docker-compose.prod.yml:
+  # redis-exporter:
+  #   image: oliver006/redis_exporter:latest
+  #   environment:
+  #     - REDIS_ADDR=redis:6379
+  #     - REDIS_PASSWORD=${REDIS_PASSWORD}
+  #   ports:
+  #     - "9121:9121"
+  - job_name: 'redis'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          component: 'cache'
+          service: 'redis'
+    # Uncomment when redis_exporter is added
+
+  # ============================================================================
+  # CADDY REVERSE PROXY
+  # ============================================================================
+  - job_name: 'caddy'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['caddy:2019']  # Caddy admin API
+        labels:
+          component: 'proxy'
+          service: 'caddy'
+    metrics_path: '/metrics'
+
+  # ============================================================================
+  # NODE EXPORTER (System Metrics)
+  # ============================================================================
+  # Note: Requires node_exporter container
+  # Add to docker-compose.prod.yml:
+  # node-exporter:
+  #   image: prom/node-exporter:latest
+  #   ports:
+  #     - "9100:9100"
+  - job_name: 'node'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          component: 'infrastructure'
+          service: 'node-exporter'
+    # Uncomment when node_exporter is added
+
+# =============================================================================
+# RECORDING RULES (Pre-aggregate metrics for faster queries)
+# =============================================================================
+# Create alerts/recording-rules.yml:
+# groups:
+#   - name: oxy_engine_rules
+#     interval: 30s
+#     rules:
+#       - record: oxy:requests:rate5m
+#         expr: rate(http_requests_total[5m])
+#       - record: oxy:errors:rate5m
+#         expr: rate(http_requests_total{status=~"5.."}[5m])
+
+# =============================================================================
+# ALERTING RULES (Define when to send alerts)
+# =============================================================================
+# Create alerts/alerting-rules.yml:
+# groups:
+#   - name: oxy_engine_alerts
+#     rules:
+#       - alert: HighErrorRate
+#         expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+#         for: 5m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "High error rate on {{ $labels.instance }}"
+#           description: "Error rate is {{ $value }} (threshold: 0.05)"
+#
+#       - alert: HighResponseTime
+#         expr: http_request_duration_seconds{quantile="0.95"} > 2
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "High response time on {{ $labels.instance }}"
+#           description: "95th percentile is {{ $value }}s (threshold: 2s)"
+#
+#       - alert: RedisDown
+#         expr: up{job="redis"} == 0
+#         for: 1m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "Redis is down"
+#           description: "Redis has been down for more than 1 minute"
+#
+#       - alert: HighMemoryUsage
+#         expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.1
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "Low memory on {{ $labels.instance }}"
+#           description: "Only {{ $value | humanizePercentage }} memory available"
+
+# =============================================================================
+# RECOMMENDED GRAFANA DASHBOARDS
+# =============================================================================
+# Import these dashboards to Grafana:
+# - FastAPI Dashboard: https://grafana.com/grafana/dashboards/16110
+# - Redis Dashboard: https://grafana.com/grafana/dashboards/11835
+# - Node Exporter Full: https://grafana.com/grafana/dashboards/1860
+# - Caddy Dashboard: https://grafana.com/grafana/dashboards/14280
+
+# =============================================================================
+# METRICS WORTH WATCHING
+# =============================================================================
+# Spend:
+# - oxy_budget_exceeded_total: requests refused because a budget was reached
+# - oxy_cost_per_request: LLM spend per request
+#
+# Security:
+# - oxy_threats_detected_total: DLP events
+# - oxy_auth_failures_total: unauthorized access attempts
+# - oxy_rate_limit_hits_total: rate-limit refusals
+#
+# Reliability:
+# - oxy_circuit_breaker_open: upstream provider failures
+# - oxy_request_duration_seconds: latency
+# - oxy_cache_hit_rate: response-cache efficiency
+#
+# Usage:
+# - oxy_tokens_processed_total: tokens through the gateway
+# - oxy_projects_active: active projects
+# - oxy_api_keys_created: API keys issued

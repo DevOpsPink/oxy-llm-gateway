@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  oxy-engine:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.engine
+    environment:
+      SUPABASE_URL: http://supabase:8000
+      SUPABASE_SERVICE_KEY: supabase_service_key
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+    ports:
+      - "8000:8000"
+
+  redis:
+    image: docker.io/library/redis:7.4.12-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
+    ports:
+      - "6379:6379"
+
+  ollama:
+    image: ollama/ollama:0.40.16@sha256:910d0d8107b538fb0894e63163eb195de0cc7aefcbc666dc62d3b18f71124592
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    # Pre-pull a small model for the example (optional)
+    # command: ["bash", "-lc", "ollama pull llama3"]
+
+networks:
+  default:
+    name: oxy-local-ollama

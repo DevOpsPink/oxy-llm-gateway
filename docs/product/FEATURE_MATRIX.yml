@@ -1,0 +1,1111 @@
+# Feature matrix linking landing claims to implementation, tests, and docs.
+# Status key: ga (generally available), beta (partially implemented or requires config), planned (not yet implemented).
+# GA readiness criteria (use before setting status: ga):
+# - Single, well-defined behavior and product contract (no conflicting code paths).
+# - code_refs point to real implementation of that contract.
+# - Automated tests exist for the happy path and common error conditions.
+# - At least one doc page (new docs tree) explains what it does, how to configure it, and its limitations/caveats.
+# - UI exposure is discoverable and not labeled/buried as “beta/experimental” if marked ga.
+# - No hard SLAs (e.g., 99.9%, <5ms, 7-year) unless backed by enforceable contracts (assume none by default).
+
+- id: kill-switch
+  label: Kill Switch
+  landing:
+    present: true
+    sections: ["Hero", "Features", "Comparison"]
+    copy_snippet: "Kill any agent fast with a dedicated kill switch."
+  status: ga
+  product_contract:
+    summary: Best-effort stop/pause of agent sessions; blocks further requests routed through Oxy.
+    scope: ["agents", "api", "dashboard-ui"]
+    guarantees: []
+  code_refs:
+    - packages/engine/routes/agent_sessions_v1.py
+    - packages/engine/core/control.py
+    - packages/engine/routes/proxy.py
+    - packages/ui/src/app/page.tsx
+    - packages/ui/src/app/dashboard/agents/page.tsx
+  tests:
+    - packages/engine/tests/test_agent_sessions_api.py
+    - packages/engine/tests/test_control.py
+    - packages/engine/tests/integration/test_e2e_paths.py::test_kill_switch_blocks_session
+  docs:
+    - docs/agents/kill-switch.md
+    - docs/recipes/cloud-starter.md
+
+- id: budgets
+  label: Budgets & Alerts
+  landing:
+    present: true
+    sections: ["Hero chips", "Features", "FAQ"]
+    copy_snippet: "Budget alerts at milestones (configurable)."
+  status: ga
+  product_contract:
+    summary: Budget check per project before the provider (atomic, fails closed); configurable alerts and optional auto-suspend on spikes.
+    scope: ["api", "dashboard-ui", "agents"]
+    guarantees: []
+  code_refs:
+    - packages/engine/core/budget.py
+    - packages/engine/routes/proxy.py
+    - packages/engine/workers/budget_alerts.py
+    - packages/engine/workers/cost_anomaly_detector.py
+    - packages/ui/src/app/page.tsx
+    - packages/ui/src/app/dashboard/billing/page.tsx
+  tests:
+    - packages/engine/tests/test_budget_logic.py
+    - packages/engine/tests/test_workers.py
+    - packages/engine/tests/integration/test_e2e_paths.py::test_cloud_agent_budget_blocks
+  docs:
+    - docs/agents/budgets.md
+    - docs/recipes/cloud-starter.md
+
+- id: cost-spike-auto-suspend
+  label: Auto-Suspend on Cost Spikes
+  landing:
+    present: true
+    sections: ["Features", "Comparison", "FAQ"]
+    copy_snippet: "Extreme cost spike? Auto-pause with configurable thresholds."
+  status: ga
+  product_contract:
+    summary: "Heuristic spike vs baseline (1h vs 30d hourly average). Thresholds configurable (warning/urgent/critical/suspend). Auto-suspend uses same org/project status fields as budgets/kill-switch; suspension duration configurable."
+    scope: ["api", "agents", "workers"]
+    guarantees: []
+  code_refs:
+    - packages/engine/workers/cost_anomaly_detector.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_workers.py
+    - packages/engine/tests/test_cost_spike_detection.py
+  docs:
+    - docs/features/cost-spike-auto-suspend.md
+  gap_analysis:
+    risk_level: p2
+    needs: []
+    notes: "Heuristic/estimate-only; depends on request_logs completeness."
+
+- id: loop-detection
+  label: Loop Detection
+  landing:
+    present: true
+    sections: ["Features", "FAQ"]
+    copy_snippet: "Catch infinite loops & stuck agents. Auto-alert or pause."
+  status: ga
+  product_contract:
+    summary: "Heuristic loop detection per agent: N identical prompts in M seconds (normalized prompt hash from request_logs). Actions: log/alert; optional auto-suspend using agent status (shared with budgets/kill-switch)."
+    scope: ["agents", "workers"]
+    guarantees: []
+  code_refs:
+    - packages/engine/workers/agent_anomaly_detector.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_workers.py
+    - packages/engine/tests/test_loop_detection.py
+  docs:
+    - docs/features/loop-detection.md
+  gap_analysis:
+    risk_level: p2
+    needs: []
+    notes: "Heuristic; skips when prompts unavailable (privacy modes)."
+
+- id: response-caching
+  label: Response Caching
+  landing:
+    present: true
+    sections: ["Features", "Comparison"]
+    copy_snippet: "Reduce costs on repeated requests with automatic caching."
+  status: ga
+  product_contract:
+    summary: Cache identical deterministic requests to reduce repeat provider calls.
+    scope: ["api", "core", "providers"]
+    guarantees: []
+  code_refs:
+    - packages/engine/core/response_cache.py
+    - packages/engine/routes/proxy.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_providers.py
+    - packages/engine/tests/test_routes.py
+  docs:
+    - docs/features/response-caching.md
+    - docs/providers/cloud.md
+
+- id: cost-optimizer
+  label: AI Cost Optimizer
+  landing:
+    present: true
+    sections: ["Features", "Docs/features"]
+    copy_snippet: "Get AI-powered savings recommendations to help reduce spend."
+  status: ga
+  product_contract:
+    summary: Heuristic recommendations (model switch, caching, throttling) based on recent request_logs; estimates only, not guaranteed savings or billing truth.
+    scope: ["api", "dashboard-ui"]
+    guarantees: []
+    limitations:
+      - "Heuristic only; no guaranteed savings."
+      - "Depends on request_logs quality and pricing metadata."
+      - "Advisory only; does not automatically change infrastructure/config."
+  code_refs:
+    - packages/engine/routes/cost_optimizer_v1.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_cost_optimizer_api.py::test_recommendations_basic
+    - packages/engine/tests/test_cost_optimizer_api.py::test_limit_enforced
+    - packages/engine/tests/test_cost_optimizer_api.py::test_caching_recommendation_when_volume_high
+    - packages/engine/tests/test_cost_optimizer_api_no_data.py::test_cost_optimizer_handles_no_data_gracefully
+  docs:
+    - docs/analytics/cost-optimizer.md
+  gap_analysis:
+    risk_level: p2
+    needs: []
+    notes: "Heuristic and estimates-only; relies on populated request_logs."
+
+- id: cost-attribution
+  label: Cost Attribution & CSV Export
+  landing:
+    present: true
+    sections: ["Features", "Use Cases", "FAQ"]
+    copy_snippet: "Tag by customer, team, feature. Attribute usage to cost centers."
+  status: ga
+  product_contract:
+    summary: Tag requests (customer/team/feature), aggregate costs, export CSV for finance.
+    scope: ["api", "dashboard-ui", "analytics"]
+    guarantees: []
+  code_refs:
+    - packages/engine/routes/attribution_summary.py
+    - packages/engine/routes/exports.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_attribution_summary_api.py
+    - packages/engine/tests/test_exports_requests_csv.py
+  docs:
+    - docs/analytics/cost-attribution.md
+
+- id: privacy-modes
+  label: Privacy Modes
+  landing:
+    present: true
+    sections: ["FAQ"]
+    copy_snippet: "Zero Prompt Logging mode available."
+  status: ga
+  product_contract:
+    summary: "Configurable logging modes: zero_prompt_logging, metadata_only, debug_full."
+    scope: ["api", "dashboard-ui", "security"]
+    guarantees: []
+  code_refs:
+    - packages/engine/routes/privacy.py
+    - packages/engine/core/privacy_logging.py
+    - packages/engine/core/costs.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_privacy_api.py
+    - packages/engine/tests/test_privacy_logging.py
+    - packages/engine/tests/integration/test_e2e_paths.py::test_local_agent_zero_prompt_logging
+    - packages/engine/tests/integration/test_e2e_paths.py::test_debug_full_stores_text_when_enabled
+  docs:
+    - docs/security/privacy-modes.md
+    - docs/recipes/local-ollama-agent.md
+
+- id: dlp-checks
+  label: DLP Checks
+  landing:
+    present: true
+    sections: ["Features"]
+    copy_snippet: "DLP checks available."
+  status: ga
+  product_contract:
+    summary: "Regex-based detection of obvious secrets (card-like numbers, emails, API key-like strings) pre-provider; modes: off/log/block; best-effort only."
+    scope: ["api", "providers", "security"]
+    guarantees: []
+  code_refs:
+    - packages/engine/routes/proxy.py
+    - packages/engine/tests/test_dlp.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_dlp.py
+    - packages/engine/tests/integration/test_e2e_paths.py::test_dlp_blocks_and_logs
+    - packages/engine/tests/integration/test_e2e_paths.py::test_dlp_log_mode_allows
+  docs:
+    - docs/security/dlp-checks.md
+    - packages/ui/src/app/docs/features/dlp-scanning/page.tsx
+
+- id: anomaly-detection
+  label: Anomaly Detection / Intelligence
+  landing:
+    present: true
+    sections: ["Intelligence", "Features", "Comparison"]
+    copy_snippet: "Continuously monitor cost spikes, loops, and suspicious patterns and surface anomalies quickly."
+  status: ga
+  product_contract:
+    summary: Detects cost spikes vs 7-day baseline, volume bursts, and budget burn risk; surfaced via GET /v1/intelligence/overview. Heuristic signals only.
+    scope: ["api", "workers", "dashboard-ui"]
+    guarantees: []
+    limitations:
+      - "Heuristic-only anomaly signals; not a monitoring SLA."
+      - "Depends on request_logs completeness/quality and org configuration (privacy, retention, budgets)."
+      - "May miss some incidents or produce false positives."
+  code_refs:
+    - packages/engine/routes/intelligence.py
+    - packages/engine/workers/anomaly_detector.py
+    - packages/ui/src/app/page.tsx  # intelligence cards/callout
+  tests:
+    - packages/engine/tests/test_intelligence_overview_api.py
+    - packages/engine/tests/test_workers.py
+    - packages/engine/tests/test_anomaly_detector_baseline.py
+  docs:
+    - docs/analytics/intelligence.md
+    - docs/analytics/anomaly-detection.md
+  gap_analysis:
+    risk_level: p1
+    needs: []
+    notes: "Heuristic anomalies/projections; accuracy depends on data quality and config."
+
+- id: response-audit-logs
+  label: Audit Logs & Exports
+  landing:
+    present: true
+    sections: ["Features"]
+    copy_snippet: "Export data for audit with long-term retention (configurable)."
+  status: ga
+  product_contract:
+    summary: Request/audit logs with CSV export; retention is policy-driven and privacy-mode aware; long-term retention available as add-on.
+    scope: ["api", "security", "addons"]
+    guarantees: []
+    configuration:
+      fields:
+        - key: request_log_retention_days
+          type: integer
+          description: "Per-org retention (min 7, default 365, max 2555)."
+        - key: privacy_mode
+          type: enum
+          description: "`zero_prompt_logging`, `metadata_only` (default), `debug_full` (text only when debug flag enabled)."
+        - key: audit_logs_add_on
+          type: boolean
+          description: "Extends retention per policy; no fixed SLA."
+    behavior:
+      - "Stores request metadata (model/provider/tokens/cost/latency/status/cache/threat flags/cost_tags); snapshots follow privacy mode."
+      - "Exports via GET /v1/exports/requests.csv; snapshots null when disallowed."
+      - "Retention worker deletes rows older than org window; clamped to safe bounds."
+    limitations:
+      - "Best-effort technical/audit logging; not a compliance guarantee."
+      - "Does not store prompts when privacy mode forbids it; debug_full gated by env flag."
+  code_refs:
+    - packages/engine/routes/exports.py
+    - packages/engine/workers/log_retention.py
+    - packages/engine/core/privacy_logging.py
+    - packages/engine/core/costs.py
+    - packages/ui/src/app/page.tsx  # CSV export card, add-on
+    - packages/ui/src/app/dashboard/privacy/page.tsx
+    - packages/ui/src/app/dashboard/audit/page.tsx
+  tests:
+    - packages/engine/tests/test_exports_requests_csv.py
+    - packages/engine/tests/test_log_retention_worker.py
+    - packages/engine/tests/test_privacy_logging.py
+    - packages/engine/tests/test_audit_api.py
+  docs:
+    - docs/security/audit-logs.md
+    - docs/features/add-ons.md
+  gap_analysis:
+    risk_level: p1
+    needs: []
+    notes: "Retention is policy driven; long-term add-on not fully verified."
+
+- id: key-rotation
+  label: Key Rotation
+  landing:
+    present: true
+    sections: ["Features"]
+    copy_snippet: "Key rotation reminders (age-based headers, optional enforcement)."
+  status: ga
+  product_contract:
+    summary: Age-based key rotation hygiene with warnings and optional enforcement; Oxy nudges per thresholds but does not auto-rotate secrets.
+    scope: ["security", "api"]
+    guarantees: []
+    configuration:
+      fields:
+        - key: mode
+          type: enum
+          description: "`off|warn|enforce` (KEY_ROTATION_MODE, default warn)."
+        - key: warning_days
+          type: integer
+          description: "Start warning at this age (KEY_ROTATION_WARNING_DAYS, default 80)."
+        - key: max_days
+          type: integer
+          description: "Expired threshold (KEY_ROTATION_MAX_DAYS, default 90)."
+    behavior:
+      - "Fresh (<warning): pass through."
+      - "Warning (>=warning,<max): allow + headers (X-Oxy-Key-Rotation-Status/Age/Expires-In-Days/URL)."
+      - "Expired (>=max): mode=warn → allow with status=expired; mode=enforce → block 403 with error.code=key_rotation_required."
+    limitations:
+      - "Hygiene/visibility only; does not rotate keys for you."
+      - "Relies on timestamps; fails open on lookup errors."
+  code_refs:
+    - packages/engine/middleware/key_rotation.py
+    - packages/ui/src/app/page.tsx  # badges/cards
+    - packages/ui/src/app/dashboard/settings/org/page.tsx
+    - packages/ui/src/app/docs/features/key-rotation/page.tsx
+  tests:
+    - packages/engine/tests/test_middleware.py
+  docs:
+    - docs/security/key-rotation.md
+  gap_analysis:
+    risk_level: p1
+    needs: []
+    notes: "Rotation support exists; enforcement optional; defaults warn-only."
+
+- id: rate-limiting-ddos
+  label: Rate Limiting / Basic DDoS Protection
+  landing:
+    present: true
+    sections: ["Comparison"]
+    copy_snippet: "DDoS Protection (rate limits)."
+  status: ga
+  product_contract:
+    summary: Per-key/endpoint rate limits to mitigate abuse; intended to pair with external WAF for production.
+    scope: ["api", "security"]
+    guarantees: []
+  code_refs:
+    - packages/engine/middleware/rate_limit.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_middleware.py
+  docs:
+    - docs/security/ip-protection.md
+
+- id: security-headers
+  label: Security Headers
+  landing:
+    present: true
+    sections: ["Comparison"]
+    copy_snippet: "Security Headers support (HSTS, CSP, XSS)."
+  status: ga
+  product_contract:
+    summary: Middleware for standard headers (HSTS/CSP/etc.) when configured.
+    scope: ["security", "api"]
+    guarantees: []
+  code_refs:
+    - packages/engine/middleware/security.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_middleware.py
+  docs:
+    - docs/security/ip-protection.md
+
+- id: geo-blocking
+  label: Geo-Blocking / IP-Based Protections
+  landing:
+    present: false
+  status: ga
+  product_contract:
+    summary: Header-first, IP-based middleware to block requests from configured countries/regions; best-effort signal, not sanctions advice.
+    scope: ["security", "addons"]
+    guarantees: []
+    configuration:
+      fields:
+        - key: blocked_countries
+          type: list
+          description: "ISO country codes (env `GEO_BLOCKED_COUNTRIES`), configurable per deployment."
+        - key: blocked_regions
+          type: list
+          description: "Optional region/state codes when provided via `X-Region-Code`."
+        - key: fail_open_on_unknown
+          type: boolean
+          description: "Default allow + log when country is unknown; set `GEO_FAIL_OPEN_ON_UNKNOWN=false` to block."
+        - key: headers
+          type: list
+          description: "Resolution order: CF-IPCountry > X-Country-Code > X-Geo-Country > X-Appengine-Country; optional IP lookup if enabled."
+        - key: status_code
+          type: integer
+          description: "Default 451; 403 supported via `GEO_BLOCK_STATUS_CODE`."
+    behavior:
+      - "Blocked country/region -> 451 with error.code=geo_blocked and country/source in body."
+      - "Unknown country -> allow + log by default; optionally block via fail-open flag."
+      - "Health/metrics paths bypassed; logs avoid full IP (country+source only)."
+    limitations:
+      - "IP/header-based heuristic; VPNs/proxies can bypass or obfuscate."
+      - "Not a sanctions/export-compliance engine; operators must maintain lists."
+  code_refs:
+    - packages/engine/middleware/geo_blocking.py
+    - packages/ui/src/app/page.tsx  # enterprise features
+    - packages/ui/src/app/docs/features/geo-blocking/page.tsx
+    - packages/ui/src/app/dashboard/guardrails/page.tsx
+  tests:
+    - packages/engine/tests/test_middleware.py
+  docs:
+    - docs/security/geo-blocking.md
+    - docs/security/ip-protection.md
+  gap_analysis:
+    risk_level: p1
+    needs: []
+    notes: "Geo/IP controls require configuration; effectiveness depends on deployment."
+
+- id: privacy-logging
+  label: Logging & Data Safety (FAQ)
+  landing:
+    present: true
+    sections: ["FAQ"]
+    copy_snippet: "By default we don't store your prompts or AI responses—only metadata… Privacy modes include zero prompt logging; debug modes may log more."
+  status: ga
+  product_contract:
+    summary: Default metadata logging; selectable modes; debug_full can log text.
+    scope: ["security", "api", "dashboard-ui"]
+    guarantees: []
+  code_refs:
+    - packages/engine/routes/privacy.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_privacy_api.py
+  docs:
+    - docs/security/privacy-modes.md
+
+- id: integrations-webhooks
+  label: Webhooks Integration
+  landing:
+    present: true
+    sections: ["Integrations"]
+    copy_snippet: "Webhooks — Real-time events to any endpoint (Available)."
+  status: ga
+  product_contract:
+    summary: Webhook registration and delivery for selected events.
+    scope: ["api", "dashboard-ui", "integrations"]
+    guarantees: []
+  code_refs:
+    - packages/engine/routes/notifications_v1.py
+    - packages/engine/routes/public.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_notifications_api.py
+  docs:
+    - docs/features/webhooks.md
+
+- id: integrations-hubspot
+  label: HubSpot Integration
+  landing:
+    present: true
+    sections: ["Integrations"]
+    copy_snippet: "HubSpot — Auto-sync leads and deals (Available)."
+  status: ga
+  product_contract:
+    summary: Best-effort outbound sync to HubSpot (contacts/deals/notes) when enabled; failures do not impact core billing/intelligence flows.
+    scope: ["integrations"]
+    guarantees: []
+    configuration:
+      fields:
+        - key: HUBSPOT_ENABLED
+          type: boolean
+          description: "Enable/disable HubSpot sync."
+        - key: HUBSPOT_API_KEY
+          type: string
+          description: "HubSpot private app token."
+        - key: HUBSPOT_MAX_RETRIES
+          type: integer
+          description: "Retry attempts for transient errors."
+        - key: HUBSPOT_BACKOFF_SECONDS
+          type: number
+          description: "Backoff seconds for retries."
+    behavior:
+      - "Sync contacts (email/name/company/role/source/score), deals (subscription/churn), and notes."
+      - "Outbound-only; best effort; failures logged and do not block core flows."
+    limitations:
+      - "Availability depends on HubSpot auth/scopes/region; no SLAs or guaranteed delivery."
+  code_refs:
+    - packages/engine/integrations/hubspot.py
+    - packages/ui/src/app/page.tsx  # integrations card
+  tests:
+    - packages/engine/tests/test_hubspot_integration.py
+  docs:
+    - docs/integrations/hubspot.md
+  gap_analysis:
+    risk_level: p1
+    needs: []
+    notes: "Best-effort sync; depends on HubSpot configuration and environment."
+
+- id: integrations-slack-discord
+  label: Slack / Discord Alerts
+  landing:
+    present: true
+    sections: ["Integrations"]
+    copy_snippet: "Slack / Discord — Outbound alerts to your team channels."
+  status: ga
+  product_contract:
+    summary: "Outbound webhooks to Slack and Discord using customer-supplied webhook URLs; best-effort delivery."
+    scope: ["notifications", "integrations", "billing", "anomaly-detection"]
+    guarantees:
+      - "Best-effort only; no SLA or guaranteed delivery."
+      - "Uses same events as email/webhooks: budget alerts and cost anomalies/intelligence alerts."
+      - "No inbound commands or data collection from Slack/Discord."
+      - "Payloads exclude secrets/prompts; URLs stored as secrets."
+    behavior:
+      - "Triggers on budget threshold alerts and cost anomalies."
+      - "Queued + retried with backoff for transient failures; non-blocking to core flows."
+      - "Disabled if webhook URL is missing or invalid."
+    limitations:
+      - "Delivery depends on Slack/Discord availability and customer webhook configuration."
+      - "No SLA; keep email/webhooks as primary channel."
+      - "One-way outbound only; no bot commands."
+  code_refs:
+    - packages/engine/routes/notifications_v1.py
+    - packages/engine/core/notify_channels.py
+    - packages/engine/workers/budget_alerts.py
+    - packages/engine/workers/cost_anomaly_detector.py
+    - packages/ui/src/app/dashboard/notifications/page.tsx
+    - packages/ui/src/app/page.tsx  # integrations card
+  tests:
+    - packages/engine/tests/test_notifications_api.py
+    - packages/engine/tests/test_notify_channels.py
+    - packages/engine/tests/test_budget_alerts_notifications.py
+    - packages/engine/tests/test_cost_anomaly_notifications.py
+  docs:
+    - docs/integrations/slack-discord.md
+  gap_analysis:
+    risk_level: p2
+    needs: []
+    notes: "Best-effort delivery; keep email/webhooks as primary."
+
+- id: integrations-zapier
+  label: Zapier Integration
+  landing:
+    present: true
+    sections: ["Integrations"]
+    copy_snippet: "Zapier — Outbound triggers to your Zaps (best-effort)."
+  status: ga
+  product_contract:
+    summary: "Outbound events from Oxy to Zapier via customer-supplied webhook."
+    scope: ["notifications", "integrations", "billing", "anomaly-detection"]
+    guarantees:
+      - "Best-effort delivery; no SLA or guaranteed execution."
+      - "Payloads are minimal (IDs, org/project name, plan/usage numbers, event type, timestamps); no prompts/secrets."
+      - "Events include budget threshold alerts and cost anomalies (same triggers as email/webhooks)."
+    behavior:
+      - "Per-org toggle with Zapier webhook URL; only sends when enabled and URL is valid."
+      - "Event allowlist selectable (budget.threshold_crossed, anomaly.raised)."
+      - "Retries once on transient failures; does not block core request/worker flows."
+    limitations:
+      - "Downstream Zap execution is Zapier’s responsibility."
+      - "Delivery depends on Zapier/webhook availability."
+      - "Outbound-only; no inbound commands or data pull from Zapier."
+  code_refs:
+    - packages/engine/routes/notifications_v1.py
+    - packages/engine/core/zapier.py
+    - packages/engine/workers/budget_alerts.py
+    - packages/engine/workers/cost_anomaly_detector.py
+    - packages/ui/src/app/dashboard/integrations/page.tsx
+    - packages/ui/src/app/page.tsx  # integrations card
+  tests:
+    - packages/engine/tests/test_notifications_api.py
+    - packages/engine/tests/test_zapier_notifier.py
+    - packages/engine/tests/test_budget_alerts_notifications.py
+    - packages/engine/tests/test_cost_anomaly_notifications.py
+  docs:
+    - docs/integrations/zapier.md
+  gap_analysis:
+    risk_level: p2
+    needs: []
+    notes: "Best-effort delivery; keep email/webhooks as primary."
+
+- id: agent-templates
+  label: Agent Templates
+  landing:
+    present: true
+    sections: ["Agent Templates"]
+    copy_snippet: "9 agent types, ready to deploy."
+  status: ga
+  product_contract:
+    summary: UI-presented templates with predefined roles/settings; depends on backend config to enforce allowlists/budgets.
+    scope: ["dashboard-ui", "api"]
+    guarantees: []
+  code_refs:
+    - packages/ui/src/app/page.tsx  # templates section
+    - packages/engine/routes/agents.py  # agent types
+  tests:
+    - packages/engine/tests/test_agent_sessions_api.py
+    - packages/engine/tests/test_agent_templates_api.py
+    - packages/ui/tests/e2e/features-ga.spec.ts
+  docs:
+    - docs/agents/agents-and-sessions.md
+    - docs/agents/templates.md
+  gap_analysis:
+    risk_level: p1
+    needs: []
+    notes: "Templates surfaced in UI; maintain backend enforcement/config validation coverage."
+
+- id: intelligence
+  label: Intelligence & Security Score
+  landing:
+    present: true
+    sections: ["Intelligence", "Comparison"]
+    copy_snippet: "Help forecast end-of-month costs and alert you as you approach budget limits."
+  status: ga
+  product_contract:
+    summary: Overview endpoint (`/v1/intelligence/overview`) returns recent anomalies (heuristic), cost/usage insights, simple spend projection, and heuristic security score (budgets, DLP, privacy mode, key rotation age, rate limits, caching). Estimates only.
+    scope: ["api", "dashboard-ui", "workers"]
+    guarantees: []
+    limitations:
+      - "Heuristic/advisory only; not billing truth or monitoring/SOC SLA."
+      - "Accuracy depends on request_logs quality, retention, privacy modes, budgets, and configured controls."
+      - "Forecasts are simple projections; anomalies/score may miss or misclassify events."
+  code_refs:
+    - packages/engine/routes/intelligence.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_intelligence_overview_api.py
+    - packages/engine/tests/test_security_score_logic.py
+  docs:
+    - docs/analytics/intelligence.md
+    - docs/analytics/security-score.md
+  gap_analysis:
+    risk_level: p2
+    needs: []
+    notes: "Heuristic/estimates-only outputs; depends on request_logs quality and configured controls."
+
+- id: security-score
+  label: Security Score
+  landing:
+    present: true
+    sections: ["Intelligence", "Comparison"]
+    copy_snippet: "Security Score to highlight configured controls."
+  status: ga
+  product_contract:
+    summary: Deterministic heuristic (budgets, DLP, privacy mode, key rotation age, rate limits, caching). Grades A-F; estimates only; not a certification.
+    scope: ["api", "dashboard-ui"]
+    guarantees: []
+    limitations:
+      - "Heuristic configuration signal; not a security guarantee or compliance certification."
+      - "Depends on enabled controls; 'A' does not imply SOC/ISO readiness."
+      - "Advisory only; does not replace pen tests or SIEM/SOC."
+  code_refs:
+    - packages/engine/routes/intelligence.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_intelligence_overview_api.py
+    - packages/engine/tests/test_security_score_logic.py
+    - packages/ui/tests/e2e/features-ga.spec.ts
+  docs:
+    - docs/analytics/security-score.md
+  gap_analysis:
+    risk_level: p2
+    needs: []
+    notes: "Heuristic, estimates-only; UI/e2e coverage now in place for score display."
+
+- id: local-llm
+  label: Local LLM Support
+  landing:
+    present: true
+    sections: ["Hero", "Features"]
+    copy_snippet: "Works with Ollama, vLLM, local models."
+  status: ga
+  product_contract:
+    summary: Support for local providers (Ollama/vLLM/custom OpenAI-compatible HTTP) with OpenAI-style schema; same guardrails (DLP/privacy/budgets/logging/rate limits); performance/quality are deployment-dependent.
+    scope: ["local-models", "agents", "providers", "dashboard-ui", "docs"]
+    guarantees: []
+    configuration:
+      fields:
+        - key: ollama_base_url
+          type: string
+          description: "Env OLLAMA_BASE_URL (default http://localhost:11434)."
+        - key: vllm_base_url
+          type: string
+          description: "Env VLLM_BASE_URL (default http://localhost:8000)."
+        - key: local_http_base_url
+          type: string
+          description: "Env LOCAL_HTTP_BASE_URL for generic OpenAI-compatible endpoints."
+        - key: local_model_timeout
+          type: integer
+          description: "Timeout in seconds (LOCAL_MODEL_TIMEOUT, default 120)."
+    behavior:
+      - "Model naming: ollama/<name>, vllm/<name>, local/<name> (uses LOCAL_HTTP_BASE_URL when set; otherwise falls back to Ollama)."
+      - "Requests and responses follow OpenAI chat completions; streaming where backend supports SSE."
+      - "Guardrails apply (DLP/privacy/budgets/logging/rate limits); cost is zero-rated for local usage."
+    limitations:
+      - "Oxy does not manage local hardware/resources; performance/latency/quality depend on deployment."
+      - "No SLAs; compatibility depends on backend honoring OpenAI API."
+  code_refs:
+    - packages/engine/providers/local_provider.py
+    - packages/ui/src/app/page.tsx
+    - examples/local-ollama-agent/README.md
+    - examples/hybrid-stack/README.md
+    - packages/ui/src/app/dashboard/providers/page.tsx
+  tests:
+    - packages/engine/tests/test_local_provider.py
+    - packages/ui/tests/e2e/features-ga.spec.ts
+  docs:
+    - docs/providers/local-llm.md
+    - docs/providers/ollama.md
+    - docs/providers/vllm.md
+    - docs/providers/custom-http-gateway.md
+    - docs/recipes/local-ollama-agent.md
+    - docs/recipes/hybrid-stack.md
+  gap_analysis:
+    risk_level: p2
+    needs: []
+    notes: "Heuristic/best-effort; performance and compatibility are deployment-dependent; no SLA."
+
+- id: referral-credits
+  label: Referral Credits
+  landing:
+    present: false
+  status: ga
+  product_contract:
+    summary: Referral credits grant usage-only discounts (non-cash, non-transferable) to referrers/referees on eligible activation; amounts and caps are policy-driven.
+    scope: ["billing", "dashboard-ui"]
+    guarantees: []
+    configuration:
+      fields:
+        - key: credit_amount_usd
+          type: decimal
+          description: "Per eligible referral (REFERRAL_CREDIT_AMOUNT_USD)."
+        - key: max_per_referrer_usd
+          type: decimal
+          description: "Cap per referrer (REFERRAL_MAX_PER_REFERRER_USD)."
+    behavior:
+      - "Referrer and referee each receive usage credits once per eligible referral."
+      - "Credits apply before paid usage; no cash value, non-transferable, non-refundable; may expire/change per policy."
+      - "Fraud/abuse checks enforced (self-referral, duplicate, IP/email heuristics)."
+    limitations:
+      - "No SLAs or promises of fixed future amounts; policy can change."
+      - "Not cash, not investment; usage discount only."
+  code_refs:
+    - packages/engine/routes/credits.py
+    - packages/ui/src/app/page.tsx  # referral section
+    - packages/ui/src/app/dashboard/billing/page.tsx
+  tests:
+    - packages/engine/tests/test_referral_env_config.py
+    - packages/engine/tests/test_billing_overview_api.py
+    - packages/engine/tests/test_routes.py
+    - packages/engine/tests/test_budget_logic.py
+  docs:
+    - docs/features/referral-credits.md
+  gap_analysis:
+    risk_level: p1
+    needs: []
+    notes: "Policy-driven credits; ensure env matches docs."
+
+- id: free-tier
+  label: Free Tier
+  landing:
+    present: true
+    sections: ["Hero chips", "CTA", "FAQ"]
+    copy_snippet: "Free tier — ~100K/mo* (limits subject to change)."
+  status: ga
+  product_contract:
+    summary: Default quota of the free plan tier (about 100K requests/mo); operators can change it or assign another tier in the database.
+    scope: ["billing"]
+    guarantees: []
+  code_refs:
+    - packages/ui/src/app/page.tsx
+    - packages/engine/routes/proxy.py
+    - packages/engine/tests/test_free_plan_limits.py
+  tests:
+    - packages/engine/tests/test_free_plan_limits.py
+    - packages/engine/tests/integration/test_e2e_paths.py::test_cloud_agent_budget_blocks
+  docs:
+    - docs/getting-started/quickstart.md
+    - docs/getting-started/free-tier.md
+
+- id: addons-sso
+  label: "Add-On: SSO / SAML"
+  landing:
+    present: false
+  status: ga
+  product_contract:
+    summary: SSO add-on enabling SAML (and OIDC where supported) login flows for the org; Oxy provides ACS/metadata, the organization configures its IdP.
+    scope: ["addons", "security", "dashboard-ui"]
+    guarantees: []
+    configuration:
+      fields:
+        - key: protocols
+          type: list
+          description: "SAML required; OIDC where supported. IdP managed by the organization."
+        - key: acs_url
+          type: string
+          description: "Assertion Consumer Service endpoint provided by Oxy."
+        - key: metadata
+          type: string
+          description: "SAML metadata/issuer provided by Oxy; IdP config is the organization's responsibility."
+    behavior:
+      - "Enables SSO config UI/API; requires org add-on flag."
+      - "Authentication flows still pass through gateway guardrails/roles."
+    limitations:
+      - "No SLA on availability/latency; depends on the organization's IdP."
+      - "The organization maintains IdP configuration and certificates."
+  code_refs:
+    - packages/engine/routes/sso.py
+    - packages/ui/src/app/page.tsx  # add-ons card
+    - packages/ui/src/app/dashboard/settings/org/page.tsx
+  tests:
+    - packages/engine/tests/test_addons_utils.py
+  docs:
+    - docs/features/add-ons.md
+  gap_analysis:
+    risk_level: p1
+    needs: []
+    notes: "Add-on requires the org flag and IdP config; IdP availability is managed by the organization (no SLA)."
+
+- id: addons-white-label
+  label: "Add-On: White-label API"
+  landing:
+    present: false
+  status: ga
+  product_contract:
+    summary: "Branding suppression/customization add-on: allows custom logo/colors/domain and limited template overrides; Oxy branding may still appear in system/legal contexts."
+    scope: ["addons", "dashboard-ui"]
+    guarantees: []
+    configuration:
+      fields:
+        - key: logo_url
+          type: string
+          description: "Custom logo for dashboard/headers where supported."
+        - key: theme
+          type: object
+          description: "Color tokens where supported; not global SLA."
+        - key: custom_domain
+          type: string
+          description: "Optional dashboard/domain mapping; requires DNS/SSL setup by the operator."
+    behavior:
+      - "Enables branding/domain settings UI when add-on flag is active."
+      - "Core API responses remain functional; some system/legal notices may retain Oxy attribution."
+    limitations:
+      - "No guarantee of 100% de-branding across all surfaces."
+      - "DNS/SSL and email templates remain deployment dependent."
+  code_refs:
+    - packages/engine/routes/add_ons.py
+    - packages/ui/src/app/page.tsx
+    - packages/ui/src/app/dashboard/settings/org/page.tsx
+  tests:
+    - packages/engine/tests/test_addons_utils.py
+  docs:
+    - docs/features/add-ons.md
+  gap_analysis:
+    risk_level: p1
+    needs: []
+    notes: "Branding/domain gating covered; de-branding is best-effort and DNS dependent."
+
+- id: addons-audit-logs
+  label: "Add-On: Long-Term Audit Logs"
+  landing:
+    present: false
+  status: ga
+  product_contract:
+    summary: Extends audit/request log retention beyond default; retention window is configurable/policy-driven, not a fixed SLA.
+    scope: ["addons", "security"]
+    guarantees: []
+    configuration:
+      fields:
+        - key: retention_days
+          type: integer
+          description: "Extended retention cap for orgs with add-on; enforced by retention worker."
+    behavior:
+      - "When add-on active, retention worker uses extended window (policy-bound)."
+      - "Privacy modes still control stored fields."
+    limitations:
+      - "No promise of specific multi-year term; depends on configured window."
+      - "Best-effort retention; storage/location per deployment."
+  code_refs:
+    - packages/engine/routes/add_ons.py
+    - packages/ui/src/app/page.tsx
+    - packages/engine/workers/log_retention.py
+  tests:
+    - packages/engine/tests/test_addons_utils.py
+    - packages/engine/tests/test_log_retention_worker.py
+  docs:
+    - docs/features/add-ons.md
+  gap_analysis:
+    risk_level: p1
+    needs: []
+    notes: "Extended retention config and gate covered by tests; policy-driven, no SLA."
+
+- id: addons-dedicated-support
+  label: "Add-On: Dedicated Support"
+  landing:
+    present: false
+  status: ga
+  product_contract:
+    summary: Label-only flag for operators who run their own support tier; it changes no behavior.
+    scope: ["addons"]
+    guarantees: []
+    configuration:
+      fields:
+        - key: channel
+          type: string
+          description: "Support channel the operator designates (email/portal)."
+    behavior:
+      - "Metadata flag only; used to route/label support requests."
+    limitations:
+      - "No response-time guarantees in-product."
+  code_refs:
+    - packages/ui/src/app/page.tsx  # add-ons card
+    - packages/engine/routes/add_ons.py
+  tests:
+    - packages/engine/tests/test_addons_utils.py
+  docs:
+    - docs/features/add-ons.md
+  gap_analysis:
+    risk_level: p1
+    needs: []
+    notes: "Support flag only."
+
+- id: addons-extra-projects
+  label: "Add-On: Extra Projects"
+  landing:
+    present: false
+  status: ga
+  product_contract:
+    summary: Raises the project cap above the plan default; the increment is configurable and the cap is enforced, not unlimited.
+    scope: ["addons", "billing"]
+    guarantees: []
+    configuration:
+      fields:
+        - key: base_limit
+          type: integer
+          description: "Plan project limit baseline."
+        - key: addon_increment
+          type: integer
+          description: "Projects added per add-on unit; configurable."
+        - key: max_projects
+          type: integer
+          description: "Hard cap to avoid 'unlimited' claims."
+    behavior:
+      - "When add-on active, project cap increases by configured increment up to max."
+    limitations:
+      - "No 'unlimited' projects; cap enforced by config."
+  code_refs:
+    - packages/engine/routes/add_ons.py
+    - packages/ui/src/app/page.tsx
+  tests:
+    - packages/engine/tests/test_addons_utils.py
+  docs:
+    - docs/features/add-ons.md
+  gap_analysis:
+    risk_level: p1
+    needs: []
+
+- id: setup-status
+  label: Setup Status
+  landing:
+    present: false
+  status: ga
+  product_contract:
+    summary: Dashboard Setup Wizard (`/dashboard/setup`) plus API (`GET /v1/setup/status`) showing completion state for providers, guardrails/privacy, billing/plan, and optional SSO.
+    scope: ["api", "dashboard-ui"]
+    guarantees: []
+    limitations:
+      - "Advisory/progress only; does not enforce completion."
+  code_refs:
+    - packages/engine/routes/setup_v1.py
+    - packages/ui/src/app/dashboard/setup/page.tsx
+  tests:
+    - packages/engine/tests/test_setup_status_api.py
+  docs:
+    - docs/features/setup-status.md
+  gap_analysis:
+    risk_level: p1
+    needs: []
+    notes: "API + dashboard Setup Wizard are GA; advisory only and depend on org config."
+
+- id: api-keys
+  label: API Keys
+  landing:
+    present: false
+  status: ga
+  product_contract:
+    summary: Manage org/project API keys via dashboard and API; create/revoke keys; secrets shown once.
+    scope: ["api", "dashboard-ui", "security"]
+    guarantees: []
+    limitations:
+      - "Best-effort tooling; keys are customer responsibility; not a security certification or SLA."
+  code_refs:
+    - packages/engine/routes/api_keys_v1.py
+    - packages/ui/src/app/dashboard/api-keys/page.tsx
+  tests:
+    - packages/engine/tests/test_api_keys_api.py
+  docs:
+    - docs/features/api-keys.md
+  gap_analysis:
+    risk_level: p2
+    needs: []
+    notes: "Keys are customer-managed; rotate/limit scope; not a compliance certification."
+
+- id: playground
+  label: Playground
+  landing:
+    present: false
+  status: ga
+  product_contract:
+    summary: In-dashboard playground for trying `/v1/chat/completions`, viewing latency/tokens, and experimenting safely.
+    scope: ["dashboard-ui", "api"]
+    guarantees: []
+    limitations:
+      - "Best-effort/debug tool; not monitoring or an SLA; provider costs apply."
+  code_refs:
+    - packages/ui/src/app/dashboard/playground/page.tsx
+  tests:
+    - packages/ui/tests/e2e/features-ga.spec.ts
+  docs:
+    - docs/features/playground.md
+  gap_analysis:
+    risk_level: p3
+    needs: []
+    notes: "Advisory/debug only; depends on configured providers and network."
+
+- id: team-and-roles
+  label: Team & Roles
+  landing:
+    present: false
+  status: ga
+  product_contract:
+    summary: Org-scoped team management with member list, invites, and basic roles; not a full enterprise IAM.
+    scope: ["dashboard-ui", "api"]
+    guarantees: []
+    limitations:
+      - "Best-effort team management; not a full IAM/RBAC system."
+  code_refs:
+    - packages/engine/routes/team_v1.py
+    - packages/ui/src/app/dashboard/team/page.tsx
+  tests:
+    - packages/engine/tests/test_team_api.py
+  docs:
+    - docs/features/team-and-roles.md
+  gap_analysis:
+    risk_level: p2
+    needs: []
+    notes: "Basic team/invite flows; not a full IAM system."
+
+- id: founders
+  label: Authors
+  landing:
+    present: true
+    sections: ["Authors"]
+    copy_snippet: "Built by Vladimir Mikhalev and Tatiana Mikhaleva."
+  status: ga
+  product_contract:
+    summary: Who built Oxy, with links to the authors' sites; not a product feature.
+    scope: ["about"]
+    guarantees: []
+  code_refs:
+    - packages/ui/src/components/marketing/founders-section.tsx
+  tests:
+    - packages/ui/src/components/marketing/founders-section.test.tsx
+  docs:
+    - README.md
+  gap_analysis:
+    risk_level: p2
+    needs: []
+    notes: "Authorship only; no audience or credential numbers."
+
+- id: cookie-banner
+  label: Cookie Banner
+  landing:
+    present: true
+    sections: ["Cookie Banner"]
+    copy_snippet: "We don’t use third-party advertising or marketing trackers."
+  status: ga
+  product_contract:
+    summary: Informational banner for essential cookies; no blocking consent flow.
+    scope: ["ui"]
+    guarantees: []
+  code_refs:
+    - packages/ui/src/components/CookieBanner.tsx
+  tests:
+    - packages/ui/src/contexts/cookie-banner-context.tsx
+    - packages/ui/src/components/CookieBanner.test.tsx
+  docs:
+    - docs/security/privacy-modes.md

@@ -1,0 +1,46 @@
+# Keeps the pinned GitHub Actions, the engine's and UI's dependencies and the
+# Dockerfiles' base images current.
+# Grouped: one pull request per ecosystem per week is a queue that gets read.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+
+  - package-ecosystem: pip
+    directory: /packages/engine
+    schedule:
+      interval: weekly
+    groups:
+      engine:
+        patterns: ["*"]
+    commit-message:
+      prefix: deps
+
+  # pnpm workspace: the root manifest and the UI package share pnpm-lock.yaml.
+  - package-ecosystem: npm
+    directories: ["/", "/packages/ui"]
+    schedule:
+      interval: weekly
+    groups:
+      ui:
+        patterns: ["*"]
+    commit-message:
+      prefix: deps
+
+  # Base images of Dockerfile.engine and Dockerfile.ui.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      base-images:
+        patterns: ["*"]
+    commit-message:
+      prefix: deps

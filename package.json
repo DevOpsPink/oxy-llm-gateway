@@ -1,0 +1,31 @@
+{
+  "name": "oxy-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "packageManager": "pnpm@10.13.1",
+  "scripts": {
+    "dev": "docker-compose up --build",
+    "stop": "docker-compose down",
+    "ui:lint": "pnpm -C packages/ui lint",
+    "ui:test": "pnpm -C packages/ui test",
+    "ui:check": "pnpm -C packages/ui lint && pnpm -C packages/ui test",
+    "validate:features": "python scripts/validate_feature_matrix.py"
+  },
+  "dependencies": {
+    "canvas-confetti": "^1.9.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "critters": "^0.0.22",
+    "eslint": "^9.39.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@sentry/cli",
+      "core-js",
+      "esbuild",
+      "sharp",
+      "unrs-resolver"
+    ]
+  }
+}

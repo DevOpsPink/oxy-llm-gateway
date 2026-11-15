@@ -1,0 +1,38 @@
+# 1. Imperial Decree: Ignore EVERYTHING by default.
+**
+
+# 2. Exceptions: Allow ONLY what is mission-critical for building.
+
+# --- Global Junk ---
+# (Explicitly ignore, even though covered by `**`)
+.git
+.vscode
+*.DS_Store
+
+# --- Dockerfiles (Required for docker-compose build) ---
+!/Dockerfile.ui
+!/Dockerfile.engine
+
+# --- Monorepo Root Files (Required by pnpm/ui) ---
+!/package.json
+!/pnpm-lock.yaml
+!/pnpm-workspace.yaml
+!/tsconfig.json
+!/postcss.config.mjs
+!/tailwind.config.ts
+
+# --- UI Package (oxy-ui) ---
+!/packages/ui/
+# (But still ignore cache/secrets INSIDE the ui package)
+/packages/ui/node_modules
+/packages/ui/.next
+/packages/ui/.env*
+/packages/ui/out
+
+# --- Engine Package (oxy-engine) ---
+!/packages/engine/
+# (But still ignore cache/secrets INSIDE the engine package)
+/packages/engine/venv
+/packages/engine/.venv
+/packages/engine/__pycache__
+/packages/engine/.env*

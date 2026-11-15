@@ -1,0 +1,158 @@
+# ============================================================================
+# OXY ENGINE - PROMETHEUS ALERTING RULES
+# ============================================================================
+# Alerting rules for the engine, Redis and the host.
+# ============================================================================
+
+groups:
+  - name: oxy_engine_alerts
+    interval: 30s
+    rules:
+      # ========================================================================
+      # SPEND ALERTS
+      # ========================================================================
+      
+      - alert: HighBudgetExceededRate
+        expr: rate(oxy_budget_exceeded_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: spend
+        annotations:
+          summary: "High rate of budget exceeded events"
+          description: "More than 10 budget exceeded events per minute for 5 minutes. Project {{ $labels.project_id }} may need budget increase."
+      
+      - alert: AbnormalCostSpike
+        expr: rate(oxy_cost_dollars_total[1h]) > rate(oxy_cost_dollars_total[24h] offset 1h) * 3
+        for: 10m
+        labels:
+          severity: warning
+          component: spend
+        annotations:
+          summary: "Abnormal cost spike detected"
+          description: "Cost rate is 3x higher than 24h average for model {{ $labels.model }}. Possible abuse or misconfiguration."
+      
+      # ========================================================================
+      # SECURITY ALERTS
+      # ========================================================================
+      
+      - alert: HighThreatDetectionRate
+        expr: rate(oxy_threats_blocked_total[5m]) > 5
+        for: 5m
+        labels:
+          severity: critical
+          component: security
+        annotations:
+          summary: "High rate of threat detections"
+          description: "More than 5 threats detected per minute. Possible attack in progress ({{ $labels.threat_type }})."
+      
+      - alert: UnusualAuthFailureRate
+        expr: rate(oxy_requests_total{status="401"}[5m]) > 20
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "High rate of authentication failures"
+          description: "More than 20 auth failures per minute. Possible brute force attack."
+      
+      # ========================================================================
+      # PERFORMANCE ALERTS
+      # ========================================================================
+      
+      - alert: HighRequestLatency
+        expr: histogram_quantile(0.95, rate(oxy_request_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "High request latency detected"
+          description: "95th percentile latency is above 10 seconds for endpoint {{ $labels.endpoint }}."
+      
+      - alert: HighErrorRate
+        expr: rate(oxy_requests_total{status=~"5.."}[5m]) / rate(oxy_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: performance
+        annotations:
+          summary: "High error rate detected"
+          description: "More than 5% of requests are failing with 5xx errors for endpoint {{ $labels.endpoint }}."
+      
+      - alert: RequestThroughputDrop
+        expr: rate(oxy_requests_total[5m]) < rate(oxy_requests_total[5m] offset 1h) * 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: performance
+        annotations:
+          summary: "Request throughput dropped significantly"
+          description: "Request rate is 50% below the rate from 1 hour ago. Possible service degradation."
+      
+      # ========================================================================
+      # AVAILABILITY ALERTS
+      # ========================================================================
+      
+      - alert: EngineDown
+        expr: up{job="oxy-engine"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: availability
+        annotations:
+          summary: "Oxy Engine is down"
+          description: "Engine instance {{ $labels.instance }} is not responding to health checks."
+      
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: availability
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance {{ $labels.instance }} is not responding. Budget operations will fail."
+      
+      # ========================================================================
+      # RESOURCE ALERTS
+      # ========================================================================
+      
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 90% on {{ $labels.instance }}. Possible memory leak."
+      
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% on {{ $labels.instance }} for 10 minutes."
+
+# ============================================================================
+# ALERTING ENDPOINTS
+# ============================================================================
+# Configure these in prometheus.yml:
+# 
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#             - 'localhost:9093'  # Alertmanager
+# 
+# Or integrate with:
+# - PagerDuty (incident management)
+# - Slack (team notifications)
+# - Email (critical alerts)
+# - OpsGenie (on-call rotations)
+# ============================================================================
+

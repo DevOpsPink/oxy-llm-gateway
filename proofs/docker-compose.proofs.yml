@@ -1,0 +1,38 @@
+# Overlay for the proofs: the engine sends every OpenAI-model request to a
+# recording fake provider instead of api.openai.com.
+#
+#   docker compose -f docker-compose.yml -f proofs/docker-compose.proofs.yml up -d --build --wait
+#   python3 proofs/run_proofs.py
+services:
+  fake-provider:
+    image: docker.io/library/python:3.12.16-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
+    command: python -u /proofs/fake_provider.py
+    volumes:
+      - ./proofs:/proofs:ro
+    ports:
+      - "127.0.0.1:9000:9000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - default
+
+  engine:
+    environment:
+      OPENAI_API_BASE: http://fake-provider:9000
+      # Placeholder: the fake provider ignores credentials.
+      OPENAI_API_KEY: proofs-placeholder-not-a-key
+      # Let hundreds of concurrent requests reach the budget check instead of the
+      # 10-per-second burst limiter.
+      BURST_LIMIT_PER_SECOND: "100000"
+    depends_on:
+      fake-provider:
+        condition: service_healthy
+
+  worker-budget:
+    environment:
+      # Mirror spend to Postgres every 2 s, so the budget proof crosses several
+      # sync cycles in seconds instead of minutes.
+      BUDGET_SYNC_INTERVAL_SECONDS: "2"

@@ -1,0 +1,66 @@
+FROM docker.io/library/python:3.12.16-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b AS builder
+# Python 3.12, pinned by patch version and digest (freshness.json watches the digest)
+# Python 3.14 is not used yet: the dependencies are not tested on it.
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN python -m venv /app/venv
+ENV PATH="/app/venv/bin:$PATH"
+
+COPY packages/engine/requirements.txt .
+
+# PRODUCTION SECURITY: --no-cache-dir reduces image size by ~30%
+# Prevents pip from storing cache in the image layer
+# Critical for production deployments where image size = pull time = deploy speed
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+
+FROM docker.io/library/python:3.12.16-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b AS final
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# SECURITY HARDENING: Create non-root user
+# CRITICAL: Running as root = container escape = host compromise
+# Defense-in-depth: Even if app is exploited, attacker has limited privileges
+# SOC2/ISO27001 REQUIREMENT: Principle of least privilege
+RUN groupadd -r app && useradd -r -g app app
+
+WORKDIR /app
+
+# SECURITY: Copy venv with proper ownership (non-root)
+COPY --from=builder --chown=app:app /app/venv ./venv
+
+# Copy ALL python files (main.py, core.py, dependencies.py, security_utils.py, etc.)
+# --chown=app:app ensures non-root user owns all files
+COPY --chown=app:app packages/engine/*.py .
+
+# CRITICAL: Copy all subdirectories (routes, middleware, providers, workers)
+# Without these, workers crash with "No such file or directory"
+COPY --chown=app:app packages/engine/routes ./routes
+COPY --chown=app:app packages/engine/middleware ./middleware
+COPY --chown=app:app packages/engine/providers ./providers
+COPY --chown=app:app packages/engine/workers ./workers
+
+# CRITICAL SECURITY FIX: Switch to non-root user BEFORE CMD execution
+# This ensures the application runs without root privileges
+# Kubernetes security context should also enforce this: runAsNonRoot: true
+USER app
+
+ENV PATH="/app/venv/bin:$PATH"
+
+# Expose port only for the API container
+EXPOSE 8000
+
+# PRODUCTION READINESS: Health check validates Redis connectivity
+# Load balancers (AWS ALB, k8s) use this to route traffic only to healthy pods
+# UPGRADED: Now checks Redis liveness, not just HTTP 200
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import httpx; httpx.get('http://localhost:8000/health', timeout=5).raise_for_status()" || exit 1
+
+# Default command remains the API, but workers will override this in docker-compose
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

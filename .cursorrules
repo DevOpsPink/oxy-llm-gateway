@@ -1,0 +1,87 @@
+<oxy_core_mode>
+You are working on the Oxy AI Gateway. Stay in stabilization mode:
+
+PRIMARY GOAL
+- Understand and maintain the existing system before changing it.
+- Do not expand product scope without explicit instruction.
+- Do not invent new subsystems.
+
+WHAT TO PRIORITIZE
+1. Understand and maintain the `/v1/chat/completions` gateway and core backend.
+2. Add minimal, targeted improvements:
+   - tests (smoke and integration first),
+   - logging and structured errors,
+   - small refactors that reduce complexity without changing behavior.
+3. Avoid breaking changes and large rewrites.
+
+HARD CONSTRAINTS
+- Do not design or implement new agent runtime systems.
+- Do not introduce major new features or subsystems.
+- Do not expand the public API surface without explicit instruction.
+- Do not redesign architecture for "perfection."
+
+PREFERENCES
+- Small, incremental, reversible changes.
+- Preserve existing behavior.
+- Make the current system easier to reason about.
+- When in doubt: document and test before refactoring.
+</oxy_core_mode>
+
+<tech_stack>
+- Core: Python 3.12 (FastAPI) | Next.js (App Router) | TypeScript (strict)
+- Data: PostgreSQL (via PostgREST or hosted Supabase) | Redis (Lua scripts for atomic ops)
+- Security: Row-level security, Pydantic v2 validation, JWT
+- Infra: Docker, docker-compose
+</tech_stack>
+
+<change_policy>
+Before any non-trivial refactor:
+1. Propose the change in natural language.
+2. Explain risk and scope.
+3. Wait for explicit user confirmation.
+
+For changes that:
+- rename modules,
+- reorganize folders,
+- modify public APIs,
+- alter auth, billing, or gateway behavior,
+
+show a minimal diff first and wait for explicit go-ahead.
+
+Never:
+- silently delete code that may be in use,
+- introduce large new subsystems,
+- break `/v1/chat/completions` semantics.
+</change_policy>
+
+<sync_protocol>
+The frontend should reflect the backend, but during stabilization:
+- backend APIs may change ahead of the UI,
+- API changes must be documented (in code, docs, or TODOs),
+- existing UI flows must not silently break.
+
+If syncing frontend would block critical backend progress, stabilize the
+backend first and document the delta.
+</sync_protocol>
+
+<self_check>
+Before submitting work:
+1. Did I assume a file/function exists without checking? Verify against the codebase.
+2. Did I add complexity? Prefer simplification.
+3. Did I keep backend and frontend in sync, or at least document the mismatch?
+4. Are JSON schemas and error formats stable and machine-readable?
+5. Is the change reliable and understandable, even if not yet polished?
+
+When uncertain: ask "Does this stabilize the gateway?" If not, defer it to
+a TODO or note instead of implementing.
+</self_check>
+
+<termination_triggers>
+Stop and rework if any of the following appear:
+- Float math for monetary values (use integers / Decimal).
+- Security holes (auth bypass, injection, unsanitized inputs).
+- Backend/frontend mismatch that silently breaks a known flow.
+- A new endpoint without a machine-readable schema or structured error format.
+- Scope expansion into agent runtimes, autonomous orchestration, or growth
+  systems that the user did not request.
+</termination_triggers>

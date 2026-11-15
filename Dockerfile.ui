@@ -1,0 +1,94 @@
+# 1. BASE IMAGE: Use Debian Slim for compatibility with Playwright/Prisma/OpenSSL
+# NOTE: Node 22 is required because pnpm 11.3+ (resolved via corepack) imports
+# the `node:sqlite` builtin which lands in Node 22. Stay on 22-slim until the
+# project pins a specific pnpm version that supports older runtimes.
+FROM docker.io/library/node:22.23.5-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+# Enable corepack (standard way to use pnpm in Node 20)
+RUN corepack enable
+
+# 2. DEPENDENCIES STAGE
+FROM base AS deps
+WORKDIR /app
+
+# Copy package configuration files (monorepo structure)
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY packages/ui/package.json ./packages/ui/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# 3. DEVELOPMENT STAGE (Tests live here)
+FROM base AS development
+WORKDIR /app
+
+# 🔥 CRITICAL: Install libraries required to run Chromium/Playwright
+# Without this step, tests will fail due to missing system libraries
+RUN apt-get update && apt-get install -y \
+    chromium \
+    git \
+    libnss3 \
+    libfreetype6 \
+    libharfbuzz0b \
+    ca-certificates \
+    fonts-freefont-ttf \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy node_modules from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/ui/node_modules ./packages/ui/node_modules
+
+# Copy source code
+COPY . .
+
+# Switch to UI directory for running commands
+WORKDIR /app/packages/ui
+
+EXPOSE 3000
+
+# Start dev server
+CMD ["pnpm", "dev"]
+
+# 4. PRODUCTION STAGE (Optimized for deployment)
+FROM base AS production
+WORKDIR /app
+
+# Security: Create non-root user (Debian syntax)
+RUN groupadd --system --gid 1001 nodejs
+RUN useradd --system --uid 1001 nextjs
+
+# Copy dependency files
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY packages/ui/package.json ./packages/ui/
+
+# Install ALL dependencies for the build (including devDependencies)
+RUN pnpm install --frozen-lockfile
+
+# Copy UI source code
+COPY packages/ui ./packages/ui
+
+# Build Next.js (uses Webpack based on our config)
+RUN pnpm --filter ui build
+
+# Cleanup: remove devDependencies to reduce image size
+RUN CI=true pnpm prune --prod
+
+# Set correct permissions
+RUN chown -R nextjs:nodejs /app
+
+# Switch to non-root user
+USER nextjs
+
+EXPOSE 3000
+
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Health check (Node.js script)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => {if(r.statusCode !== 200) throw new Error('Health check failed')})" || exit 1
+
+# Start production server
+CMD ["pnpm", "--filter", "ui", "start"]

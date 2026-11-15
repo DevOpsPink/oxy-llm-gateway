@@ -1,0 +1,168 @@
+# Caddy Configuration for Oxy Engine
+# Automatic HTTPS with Let's Encrypt
+# Replace {$DOMAIN} with your actual domain in production
+
+{$DOMAIN:localhost} {
+    # Enable automatic HTTPS
+    # Caddy will automatically obtain and renew SSL certificates from Let's Encrypt
+    
+    # Security headers
+    header {
+        # Prevent clickjacking
+        X-Frame-Options "DENY"
+        
+        # Prevent MIME sniffing
+        X-Content-Type-Options "nosniff"
+        
+        # Enable XSS protection
+        X-XSS-Protection "1; mode=block"
+        
+        # Strict Transport Security (HSTS)
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        
+        # Referrer Policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        
+        # Permissions Policy
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        
+        # Content Security Policy (for UI routes)
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+        
+        # Remove server information
+        -Server
+        -X-Powered-By
+    }
+    
+    # Enable gzip compression
+    encode gzip zstd
+    
+    # API routes (to engine)
+    handle /v1/* {
+        reverse_proxy engine:8000 {
+            # Health check
+            health_uri /health
+            health_interval 30s
+            health_timeout 5s
+            health_status 200
+            
+            # Load balancing (if you scale to multiple engine instances)
+            lb_policy round_robin
+            lb_try_duration 5s
+            lb_try_interval 1s
+            
+            # Timeouts
+            transport http {
+                dial_timeout 10s
+                response_header_timeout 60s
+                read_buffer_size 4096
+            }
+            
+            # Forward real client IP
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+    
+    # Management API routes (to engine)
+    handle /management/* {
+        reverse_proxy engine:8000 {
+            health_uri /health
+            health_interval 30s
+            health_timeout 5s
+            health_status 200
+            
+            transport http {
+                dial_timeout 10s
+                response_header_timeout 30s
+                read_buffer_size 4096
+            }
+            
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+    
+    # Health check endpoint (to engine)
+    handle /health {
+        reverse_proxy engine:8000 {
+            transport http {
+                dial_timeout 5s
+                response_header_timeout 10s
+            }
+        }
+    }
+    
+    # Grafana (if enabled)
+    handle /grafana/* {
+        reverse_proxy grafana:3000 {
+            transport http {
+                dial_timeout 5s
+                response_header_timeout 30s
+            }
+            
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+    
+    # UI routes (to Next.js)
+    handle /* {
+        reverse_proxy ui:3000 {
+            # Health check
+            health_uri /
+            health_interval 30s
+            health_timeout 5s
+            health_status 200
+            
+            transport http {
+                dial_timeout 10s
+                response_header_timeout 30s
+                read_buffer_size 8192
+            }
+            
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+    
+    # Rate limiting (optional, requires caddy-ratelimit plugin)
+    # rate_limit {
+    #     zone dynamic {
+    #         key {remote_host}
+    #         events 100
+    #         window 1m
+    #     }
+    # }
+    
+    # Access logging
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 100mb
+            roll_keep 5
+            roll_keep_for 720h
+        }
+        format json
+    }
+    
+    # Error logging
+    log {
+        output file /var/log/caddy/error.log {
+            roll_size 10mb
+            roll_keep 5
+            roll_keep_for 720h
+        }
+        level ERROR
+        format json
+    }
+}
+
+# Redirect HTTP to HTTPS (automatic with Caddy)
+# http://{$DOMAIN} {
+#     redir https://{$DOMAIN}{uri} permanent
+# }
+

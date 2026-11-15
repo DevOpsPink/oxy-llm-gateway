@@ -1,0 +1,3 @@
+# A self-hosted Oxy deployment is a private control plane: keep it out of search indexes.
+User-agent: *
+Disallow: /

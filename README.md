@@ -1,0 +1,235 @@
+# Oxy
+
+A self-hosted LLM gateway with budgets, guardrails, DLP, kill switch, and cost analytics. Runs end-to-end on a single `docker compose up` — no cloud accounts required.
+
+> Apache 2.0, built by two co-authors as a reference implementation of an LLM gateway. The main claims below are measured in CI against a recording fake provider, and each measurement is shown the bug it exists to catch: see [Proofs](#proofs).
+
+## What's here
+
+A complete control plane for LLM traffic, split across:
+
+- **`packages/engine`** — FastAPI gateway exposing an OpenAI-compatible `/v1/chat/completions` endpoint with provider routing (OpenAI, Anthropic, Gemini, Ollama, vLLM), per-project budgets, response caching, DLP, kill switch, audit logs, and cost attribution. 289 offline unit tests.
+- **`packages/ui`** — Next.js dashboard for keys, agents, budgets, privacy modes, audit logs, billing, intelligence, and playground.
+- **`db/`** — Postgres golden schema plus a Supabase-compatibility shim so the same code runs on either a hosted Supabase project or a local self-hosted stack.
+- **`docker-compose.yml`** — the local stack: Postgres, PostgREST, GoTrue (auth), Mailpit (local mail for magic links), nginx (URL-shape adapter), Redis, the engine with six background workers, and the UI.
+
+## Quickstart
+
+```bash
+git clone https://github.com/heyvaldemar/oxy-llm-gateway.git
+cd oxy-llm-gateway
+docker compose up -d --build --wait
+```
+
+The first build takes a few minutes. No `.env` file, cloud account or provider key is needed to start. Then:
+
+- Dashboard: <http://localhost:3000>
+- Engine: <http://localhost:8000/health>
+- Mail: <http://localhost:8025> (Mailpit catches the sign-in links)
+- Auth + REST API: <http://localhost:8080> (Supabase URL shape)
+
+Sign in at <http://localhost:3000/login> with any email address and open the magic link in Mailpit. During onboarding, add a provider key (OpenAI, Anthropic or Gemini), or add it later in Settings; until a provider is connected the dashboard shows demo data. Then create an API key in the dashboard and send a request:
+
+```bash
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer $OXY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4.1-mini",
+    "messages": [{"role": "user", "content": "hello"}]
+  }'
+```
+
+To check the whole path without a provider key, run the same end-to-end test CI runs. It signs up a throwaway user, follows a magic link through Mailpit, gets an Oxy API key and asks the gateway's healthcheck model for "pong":
+
+```bash
+bash scripts/stack_smoke.sh
+```
+
+## Architecture
+
+```
+        ┌──────────┐                                 ┌─────────────────┐
+Browser │   UI     │────────── HTTP :3000 ───────────│  Next.js 16     │
+        │ (Next.js)│                                 │  + Turbopack    │
+        └────┬─────┘                                 └────────┬────────┘
+             │                                                │ SSR
+             │                          ┌─────────────────────┘
+             │ /auth/v1 + /rest/v1                            
+             ▼                                                
+        ┌──────────────────────────────────────────────────┐   
+        │  nginx-postgrest :8080  (path-shape adapter)     │   
+        │  /auth/v1/*  →  gotrue:9999                      │   
+        │  /rest/v1/*  →  postgrest:3000                   │   
+        └─────────┬─────────────────────────┬───────────────┘   
+                  │                         │                  
+                  ▼                         ▼                  
+            ┌──────────┐              ┌──────────┐             
+            │ GoTrue   │              │ PostgREST│             
+            │ (auth)   │              │ (REST)   │             
+            └─────┬────┘              └─────┬────┘             
+                  │                         │                  
+                  └────────────┬────────────┘                  
+                               ▼                               
+                      ┌─────────────────┐                      
+                      │   Postgres 16   │                      
+                      │  schema + RLS   │                      
+                      └─────────────────┘                      
+                                                               
+        ┌─────────────────┐         ┌─────────────────┐        
+   API  │  Engine :8000   │◄────────│  Redis 7        │        
+        │  (FastAPI)      │         │  cache + state  │        
+        └────────┬────────┘         └─────────────────┘        
+                 │                                             
+                 ▼                                             
+        ┌─────────────────┐                                    
+        │ OpenAI /Anthropic                                    
+        │ /Gemini /Ollama │  outbound LLM calls                
+        │ /vLLM           │                                    
+        └─────────────────┘                                    
+```
+
+The same gateway code path runs against a hosted Supabase project (set `SUPABASE_URL` to your project) or against the bundled local stack (the default). PostgREST + GoTrue replace the equivalent Supabase Cloud services, sharing one JWT secret so tokens flow through to row-level security unchanged.
+
+## Feature surface
+
+Core gateway capabilities (all implemented, all heuristic where noted, all best-effort — no SLAs):
+
+- **Budgets and alerts** — a spend cap per project, reserved atomically before a request reaches a provider and settled at the real cost after it; alerts as spend nears the cap, and optional cost-spike auto-suspend. Agents have budget fields in the schema, but the request path enforces the project's cap only
+- **Kill switch** — best-effort stop on agent sessions, blocks further requests
+- **Loop detection** — heuristic detection of repeated/stuck agent calls
+- **Response caching** — deterministic-request cache via Redis with AES-encrypted payloads
+- **Cost optimizer** — heuristic recommendations (model switch, caching, throttling) based on recent request logs
+- **Cost attribution** — tag spend by customer/team/feature, export to CSV
+- **Privacy modes** — `zero_prompt_logging`, `metadata_only`, `debug_full`
+- **DLP** — regex detection before a request leaves the gateway: API keys and tokens (OpenAI, Anthropic, AWS, Stripe live, GitHub, Slack, Google), JWTs, private keys and card numbers. Email addresses alone are not blocked.
+- **Audit logs** — request logs with configurable retention
+- **Rate limiting and security headers** — per-key throttling, HSTS/CSP/etc.
+- **Geo / IP protections** — header-first country/region blocking
+- **Webhooks + Slack/Discord/Zapier outbound** — best-effort alert delivery
+- **Local LLM support** — Ollama, vLLM, or any OpenAI-compatible local endpoint
+- **Intelligence + security score** — heuristic dashboard signals (advisory only)
+
+For the canonical mapping between feature, code, tests, and docs see `docs/product/FEATURE_MATRIX.yml`.
+
+## Where it fits
+
+Three public repositories, three places to stop an AI request before it does damage:
+
+| Repository | Where it stands | What it enforces |
+|---|---|---|
+| [kubernetes-air-gapped-ai-agent](https://github.com/heyvaldemar/kubernetes-air-gapped-ai-agent) | inside a cluster with no route to the internet | the boundary at the tool server: the agent reaches tools only through MCP, models arrive as signed weights checked at admission |
+| [kubernetes-llm-inference-gateway](https://github.com/heyvaldemar/kubernetes-llm-inference-gateway) | in front of self-hosted model replicas | routing by queue and cache across vLLM replicas behind the Gateway API Inference Extension, cost per token measured |
+| Oxy (this repository) | in front of model providers, hosted or self-hosted | a budget per project, DLP, a kill switch for agent sessions, an audit row for every request |
+
+Oxy speaks the OpenAI API on both sides, so an inference gateway like the second one can sit behind it as one more OpenAI-compatible provider. The three have not been run together yet.
+
+## Proofs
+
+`proofs/run_proofs.py` starts from a running stack whose engine sends every OpenAI-model request to a fake provider that records what it receives (`proofs/docker-compose.proofs.yml`). Each proof signs up its own users; secrets are generated at random on every run.
+
+| Claim | Measured |
+|---|---|
+| A budget is never overspent | 501 requests, 100 at a time, against a $0.05 budget: the provider served 35 completions, exactly what the budget buys; overspend $0. After the budget worker's sync cycles, 0 of 20 more were served, and 0 of 20 after Redis lost the spend counter |
+| DLP stops secrets before the provider | 11 secret types sent; 0 reached the provider; a clean control request did |
+| The kill switch stops a session | 246 requests started after `POST /v1/agent-sessions/{id}/kill` returned; 0 reached the provider; first blocked response 130 ms after the call. Another tenant's kill attempt answered 404 |
+| One tenant cannot act as another's agent | 25 requests carrying another tenant's agent and session ids: 25 refused with 403, 0 reached the provider, 0 logged against that tenant's agent |
+| A revoked key stops at once | a key used a moment before (so cached) is revoked: 10 of 10 next requests refused with 401, 0 reached the provider |
+| Without Redis, nothing unchecked gets through | Redis paused for 8 s: 4 requests against a budget answered 503, 4 in a killed session 410 (decided by Postgres); 0 of the 8 reached the provider. 2 requests needing neither check were served |
+| The browser cannot reach the engine's data | 27 database functions called through PostgREST with the public anon key and with a user's token: 0 callable; 41 tables, all with row-level security; 0 policies open to the browser roles |
+| No API key is stored in Redis | 10 tenants' keys checked against every name and value of 87 Redis keys: 0 found |
+| Every request is audited | 942 requests sent by the proofs above, 942 `request_logs` rows, refusals included |
+
+`proofs/plant_violations.py` then plants, one at a time, the bug each proof exists for (a non-atomic reservation, the old spend ledger that reset every minute, DLP switched off, the kill state ignored, another tenant's ids accepted, a revoked key left in the cache, fail-open checks when Redis is down, the database functions and an open policy re-granted to the browser roles, the cache named by the raw key, audit writes dropped), requires that proof to fail, and restores the code. CI runs both on every push and daily (job **Proofs, each shown its planted violation**) and keeps the JSON; the branch `status` keeps the last 30 days.
+
+```bash
+docker compose -f docker-compose.yml -f proofs/docker-compose.proofs.yml up -d --build --wait
+python3 proofs/run_proofs.py
+python3 proofs/plant_violations.py
+```
+
+The numbers above come from a local run on 2026-11-15; the stack is the default one, a single engine process.
+
+## Scope and honest limitations
+
+- **No SLAs.** Uptime, latency, retention, savings, and security are all best-effort.
+- **Intelligence, optimizer, forecasts, and scores are heuristic.** Treat them as advisory, not billing truth or compliance certification.
+- **The vault shim uses pgcrypto AES with a configurable key.** It is intentionally weaker than Supabase's pgsodium-backed Vault. Review `db/supabase-compat.sql` before storing real provider keys in it.
+- **Email auto-confirm is on by default** so signups work without SMTP. Disable `GOTRUE_MAILER_AUTOCONFIRM` and configure SMTP for any deployment that handles real users.
+- **A budget is the project's total spend**, not a monthly allowance: nothing resets it. The Redis counter is the ledger; the budget worker copies it to `projects.current_spend` every 60 s, and if Redis loses the counter it resumes from that copy, so at most the last minute's spend can be spent again.
+- **Without Redis the gateway refuses what it cannot check.** A request against a budget answers 503; a request in an agent session is decided by the session's row in Postgres, or refused. Other requests are still served, a little slower (the API key is looked up in Postgres).
+
+## Tech stack
+
+- Backend: Python 3.12, FastAPI, asyncpg-style PostgREST client (custom over httpx), structlog, Redis with Lua scripts for atomic budget operations
+- Frontend: Next.js 16 (App Router, Turbopack), TypeScript strict, supabase-js + `@supabase/ssr`, Radix UI primitives, Tailwind
+- Data: Postgres 16, PostgREST 12, GoTrue (Supabase Auth) v2
+- Infra: docker-compose, nginx (path adapter), Caddy for TLS
+- Tests: pytest (289 offline tests), Playwright + Vitest on the UI
+
+## Repository layout
+
+```
+oxy/
+├── packages/
+│   ├── engine/        # FastAPI gateway (routes/, core/, middleware/, providers/, workers/)
+│   └── ui/            # Next.js dashboard (src/app/, src/components/, src/lib/)
+├── db/
+│   ├── schema.sql              # Golden schema (3000+ lines)
+│   └── supabase-compat.sql     # Auth/vault/role shim for self-hosted Postgres
+├── nginx/postgrest.conf        # URL-shape adapter for local stack
+├── docker-compose.yml          # Local stack (14 containers)
+├── docker-compose.prod.yml     # Deployment with TLS via Caddy
+├── docs/                       # Operator documentation
+├── scripts/                    # Dev menu, test runners, schema initializer
+├── DEPLOY.md                   # Hosted-Supabase deployment guide
+├── SECURITY.md                 # Cryptography, RLS, audit, incident response
+└── DEV_NOTES.md                # Daily development workflows
+```
+
+## Running the tests
+
+```bash
+make test-core          # 289 offline unit tests, a few seconds
+make test-integration   # requires a running engine + live external services
+```
+
+UI:
+
+```bash
+cd packages/ui
+pnpm test               # vitest
+pnpm test:e2e           # playwright
+```
+
+## Configuration
+
+The dev stack ships local defaults in `docker-compose.yml`; `packages/engine/.env` and `packages/ui/.env.local` are optional overrides. Read [SECURITY.md](SECURITY.md) before exposing it. For a deployment others can reach, see `packages/engine/ENV.example` and `DEPLOY.md`. Key environment variables:
+
+| Variable | Purpose |
+|---|---|
+| `SUPABASE_URL` | Point engine at hosted Supabase or local nginx (default `http://nginx-postgrest:8080`) |
+| `SUPABASE_SERVICE_KEY` | Service-role JWT signed with `SUPABASE_JWT_SECRET` |
+| `SUPABASE_JWT_SECRET` | Shared between GoTrue, PostgREST, and JWTs (default is dev-only) |
+| `SUPABASE_VAULT_KEY` | AES key for `vault.create_secret` in the compat shim |
+| `REDIS_URL` / `REDIS_PASSWORD` | Cache and atomic state |
+| `AUTHENTICATOR_PASSWORD` | PostgREST's database password. Unset, the database's first boot generates one (`db/03-authenticator-password.sh`) |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` | Optional org-wide provider keys (or configure them per organization in the UI) |
+| `ALLOWED_ORIGINS` | Browser origins allowed to call the engine (default `http://localhost:3000`) |
+| `NEXT_PUBLIC_SITE_URL` | Public URL of the UI, used for sign-in redirects and metadata |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Optional. Without them the Stripe endpoints answer 503 and everything else works |
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE).
+
+## Authors
+
+Oxy was built by two co-authors:
+
+- [Vladimir Mikhalev](https://heyvaldemar.com) ([heyvaldemar](https://github.com/heyvaldemar) on GitHub) — DevOps engineer behind heyvaldemar.com and its self-hosted Docker Compose and Kubernetes repositories.
+- [Tatiana Mikhaleva](https://devops.pink) ([DevOpsPink](https://github.com/DevOpsPink) on GitHub) — DevOps engineer behind devops.pink.
+
+## Status
+
+A reference implementation, not a managed service: there is no SLA, and the heuristic features (optimizer, intelligence, scores) are advisory. Issues and pull requests are welcome.
