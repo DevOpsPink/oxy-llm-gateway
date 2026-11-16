@@ -8,11 +8,11 @@
 ```bash
 git clone https://github.com/heyvaldemar/oxy-llm-gateway.git
 cd oxy-llm-gateway
-git checkout --quiet v1.0.3
+git checkout --quiet v1.0.4
 docker compose up -d --build --wait
 ```
 
-The first run builds the engine and dashboard images; it took about three minutes when this lab was tested and takes longer on a slow connection. `--wait` returns only when every service reports healthy.
+The first run builds the engine and dashboard images; it took about two minutes when this lab was tested and takes longer on a slow connection. `--wait` returns only when every service reports healthy.
 
 **Expected output** (the last lines):
 
@@ -33,7 +33,7 @@ docker compose ps --format 'table {{.Service}}\t{{.Status}}'
 
 ```
 SERVICE                STATUS
-engine                 Up 12 seconds (healthy)
+engine                 Up 11 seconds (healthy)
 gotrue                 Up 17 seconds
 mailpit                Up 23 seconds (healthy)
 nginx-postgrest        Up 17 seconds (healthy)
@@ -43,8 +43,8 @@ redis                  Up 23 seconds (healthy)
 ui                     Up 6 seconds
 worker-anomaly         Up 5 seconds (healthy)
 worker-budget          Up 6 seconds (healthy)
-worker-cost-anomaly    Up 6 seconds (healthy)
-worker-intelligence    Up 6 seconds (healthy)
+worker-cost-anomaly    Up 5 seconds (healthy)
+worker-intelligence    Up 5 seconds (healthy)
 worker-logs            Up 6 seconds (healthy)
 worker-webhook-retry   Up 6 seconds (healthy)
 ```
@@ -60,7 +60,7 @@ curl -s localhost:8000/health
 **Expected output:**
 
 ```json
-{"status":"healthy","version":"1.0.3","timestamp":"2026-11-15T23:50:42.364533+00:00","redis":"healthy","supabase":"healthy"}
+{"status":"healthy","version":"1.0.4","timestamp":"2026-11-16T04:15:46.861643+00:00","redis":"healthy","supabase":"healthy"}
 ```
 
 ## 2. Sign in with a magic link
@@ -104,16 +104,24 @@ echo "${OXY_API_KEY:0:13}..."
 **Expected output:**
 
 ```
-oxy_live_197a...
+oxy_live_8089...
 ```
+
+One habit before the first request. A key written on curl's command line, in an `Authorization` header passed with `-H`, can be read by any user of the machine with `ps` while curl runs. Give curl the key on its standard input instead, through a small function you use for the rest of the lab:
+
+```bash
+oxy() { printf 'header = "Authorization: Bearer %s"\n' "$OXY_API_KEY" | curl --config - "$@"; }
+```
+
+`oxy` is `curl` with your key added from standard input (`--config -`); every other flag works as it does with curl. The repository's own end-to-end test, `scripts/stack_smoke.sh`, passes its tokens the same way.
 
 ## 5. The first answer
 
 Oxy has a built-in health check: a fixed system prompt and the word `ping` get an answer from the gateway itself, before any provider is chosen.
 
 ```bash
-curl -s localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4.1-mini","messages":[{"role":"system","content":"You are a healthcheck bot for the Oxy Gateway."},{"role":"user","content":"ping"}]}' \
   | jq -r '.choices[0].message.content'
 ```
@@ -127,8 +135,8 @@ pong from Oxy Gateway
 Now a request that takes the whole path, with every check:
 
 ```bash
-curl -s localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hello"}]}' \
   | jq -r '.choices[0].message.content'
 ```

@@ -11,8 +11,8 @@ Five requests, one after another:
 
 ```bash
 for i in 1 2 3 4 5; do
-  curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/v1/chat/completions \
-    -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+  oxy -s -o /dev/null -w '%{http_code}\n' localhost:8000/v1/chat/completions \
+    -H 'Content-Type: application/json' \
     -d '{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}'
 done
 ```

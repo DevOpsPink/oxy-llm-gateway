@@ -47,12 +47,12 @@ from request_logs order by created_at desc limit 6;"
 ```
    time   |    model    | status  |    threat_type     | cost_usd | latency_ms | privacy_mode
 ----------+-------------+---------+--------------------+----------+------------+---------------
- 23:52:56 | gpt-4o-mini | mock    | none               | 0.000004 |         11 | metadata_only
- 23:52:56 | gpt-4o-mini | blocked | session_terminated | 0.000000 |          5 | metadata_only
- 23:52:56 | gpt-4o-mini | blocked | session_terminated | 0.000000 |         11 | metadata_only
- 23:52:56 | gpt-4o-mini | mock    | none               | 0.000004 |         17 | metadata_only
- 23:52:50 | gpt-4o-mini | mock    | none               | 0.000004 |         12 | metadata_only
- 23:52:50 | gpt-4o-mini | blocked | credit_card        | 0.000000 |         10 | metadata_only
+ 04:17:07 | gpt-4o-mini | mock    | none               | 0.000004 |          9 | metadata_only
+ 04:17:07 | gpt-4o-mini | blocked | session_terminated | 0.000000 |          5 | metadata_only
+ 04:17:07 | gpt-4o-mini | blocked | session_terminated | 0.000000 |          7 | metadata_only
+ 04:17:07 | gpt-4o-mini | mock    | none               | 0.000004 |         18 | metadata_only
+ 04:17:06 | gpt-4o-mini | mock    | none               | 0.000004 |         11 | metadata_only
+ 04:17:06 | gpt-4o-mini | blocked | credit_card        | 0.000000 |          7 | metadata_only
 (6 rows)
 ```
 
@@ -83,20 +83,20 @@ The organization is in the default privacy mode, `metadata_only` (Module 3), so 
 This is what the dashboard's **Requests** page reads, with your key instead of a browser session:
 
 ```bash
-curl -s "localhost:8000/v1/requests?limit=2" -H "Authorization: Bearer $OXY_API_KEY" | jq '.items[] | {created_at, model, status, cost_usd}'
+oxy -s "localhost:8000/v1/requests?limit=2" | jq '.items[] | {created_at, model, status, cost_usd}'
 ```
 
 **Expected output:**
 
 ```
 {
-  "created_at": "2026-11-15T23:52:56.440446+00:00",
+  "created_at": "2026-11-16T04:17:07.43203+00:00",
   "model": "gpt-4o-mini",
   "status": "mock",
   "cost_usd": 0.000004
 }
 {
-  "created_at": "2026-11-15T23:52:56.292199+00:00",
+  "created_at": "2026-11-16T04:17:07.279572+00:00",
   "model": "gpt-4o-mini",
   "status": "blocked",
   "cost_usd": 0.0
@@ -106,15 +106,15 @@ curl -s "localhost:8000/v1/requests?limit=2" -H "Authorization: Bearer $OXY_API_
 And as a CSV file for a spreadsheet or a finance team:
 
 ```bash
-curl -s localhost:8000/v1/exports/requests.csv -H "Authorization: Bearer $OXY_API_KEY" | head -3
+oxy -s localhost:8000/v1/exports/requests.csv | head -3
 ```
 
 **Expected output:**
 
 ```
 id,created_at,provider,model,status,latency_ms,prompt_tokens,completion_tokens,total_tokens,cost_usd,project_id
-411711e2-c996-4a3b-a3d8-91a8fc425df8,2026-11-15T23:52:56.440446+00:00,openai,gpt-4o-mini,mock,11,10,5,15,4e-06,62dbc85f-6a9d-4069-8481-ba3f500abff3
-e5cca950-2909-40bf-82a4-2e4e0427202f,2026-11-15T23:52:56.292199+00:00,blocked,gpt-4o-mini,blocked,5,0,0,0,0.0,62dbc85f-6a9d-4069-8481-ba3f500abff3
+26ec4944-d403-4268-891e-a8a672108d03,2026-11-16T04:17:07.43203+00:00,openai,gpt-4o-mini,mock,9,10,5,15,4e-06,698a7f6e-19c3-48e5-8893-8d7321d4dcd0
+fb3e9619-6299-4426-b657-0ef683434afd,2026-11-16T04:17:07.279572+00:00,blocked,gpt-4o-mini,blocked,5,0,0,0,0.0,698a7f6e-19c3-48e5-8893-8d7321d4dcd0
 ```
 
 The API and the export give the status of each request; the reason for a refusal (`threat_type`) is in the row itself, as in step 1.
@@ -153,8 +153,8 @@ Then revoke the key you have used all along:
 2. In the row whose prefix matches your key, press **Revoke** and confirm "Revoke this API key? It stops working at once."
 
 ```bash
-curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hello"}]}'
 ```
 

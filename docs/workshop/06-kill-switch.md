@@ -25,7 +25,8 @@ GoTrue sent a new magic link to Mailpit. Instead of clicking it, follow it with 
 
 ```bash
 LINK=$(curl -s localhost:8025/api/v1/message/latest | jq -r .Text | grep -o 'http://[^ ]*/auth/v1/verify[^ ]*')
-TOKEN=$(curl -s -o /dev/null -w '%{redirect_url}' "$LINK" | grep -o 'access_token=[^&]*' | cut -d= -f2)
+TOKEN=$(printf 'url = "%s"\n' "$LINK" | curl -s --config - -o /dev/null -w '%{redirect_url}' | grep -o 'access_token=[^&]*' | cut -d= -f2)
+oxy_owner() { printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" | curl --config - "$@"; }
 echo "session ${TOKEN:0:12}..."
 ```
 
@@ -35,19 +36,19 @@ echo "session ${TOKEN:0:12}..."
 session eyJhbGciOiJI...
 ```
 
-The token is valid for one hour. If a later command answers 401, run these two blocks again.
+The magic link carries a one-time token, so it reaches curl on standard input too, and `oxy_owner` is `oxy` with the signed-in session instead of the key. The session is valid for one hour; if a later command answers 401, run these two blocks again.
 
 ## 2. An agent and a session
 
 ```bash
-PROJECT_ID=$(curl -s localhost:8000/management/projects -H "Authorization: Bearer $TOKEN" | jq -r '.[0].id')
-AGENT_ID=$(curl -s localhost:8000/v1/agents \
-  -H "Authorization: Bearer $TOKEN" -H 'X-CSRF-Token: workshop' -b csrf_token=workshop \
+PROJECT_ID=$(oxy_owner -s localhost:8000/management/projects | jq -r '.[0].id')
+AGENT_ID=$(oxy_owner -s localhost:8000/v1/agents \
+  -H 'X-CSRF-Token: workshop' -b csrf_token=workshop \
   -H 'Content-Type: application/json' \
   -d '{"name":"workshop-agent","project_id":"'"$PROJECT_ID"'","default_model":"gpt-4o-mini"}' \
   | jq -r .agent.id)
-SESSION_ID=$(curl -s -X POST localhost:8000/v1/agents/$AGENT_ID/sessions \
-  -H "Authorization: Bearer $TOKEN" -H 'X-CSRF-Token: workshop' -b csrf_token=workshop \
+SESSION_ID=$(oxy_owner -s -X POST localhost:8000/v1/agents/$AGENT_ID/sessions \
+  -H 'X-CSRF-Token: workshop' -b csrf_token=workshop \
   -H 'Content-Type: application/json' -d '{}' | jq -r .session.id)
 echo "agent   $AGENT_ID"
 echo "session $SESSION_ID"
@@ -56,8 +57,8 @@ echo "session $SESSION_ID"
 **Expected output:**
 
 ```
-agent   a0e94ae0-d576-4233-b45e-c2e7eaa5ddf0
-session d5e44a86-fd8d-4dda-97b9-b8629ba0d23c
+agent   dcca0439-45a5-4d1d-aead-2cf0b4e8c25e
+session 809c171d-7b75-42cc-9d82-72a5efa7c270
 ```
 
 The `X-CSRF-Token` header and the `csrf_token` cookie carry the same value. The engine asks for that pair on every change made with a signed-in session, so that a page on another site cannot make the change through your browser. Any value works as long as the two match.
@@ -67,8 +68,8 @@ The `X-CSRF-Token` header and the `csrf_token` cookie carry the same value. The 
 An agent tells Oxy which session a request belongs to with two headers:
 
 ```bash
-curl -s -o /dev/null -w 'HTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -o /dev/null -w 'HTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -H "X-Oxy-Agent-Id: $AGENT_ID" -H "X-Oxy-Session-Id: $SESSION_ID" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"step 1"}]}'
 ```
@@ -81,11 +82,10 @@ HTTP 200
 
 ## 4. Kill it
 
-The kill switch takes the project's API key, so whatever watches the agent (a person, a script, an alert) can pull it without signing in:
+The kill switch takes the project's API key (`oxy`), so whatever watches the agent (a person, a script, an alert) can pull it without signing in:
 
 ```bash
-curl -s -w '\nHTTP %{http_code}\n' -X POST localhost:8000/v1/agent-sessions/$SESSION_ID/kill \
-  -H "Authorization: Bearer $OXY_API_KEY"
+oxy -s -w '\nHTTP %{http_code}\n' -X POST localhost:8000/v1/agent-sessions/$SESSION_ID/kill
 ```
 
 **Expected output:**
@@ -98,8 +98,8 @@ HTTP 200
 The agent's next step:
 
 ```bash
-curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -H "X-Oxy-Agent-Id: $AGENT_ID" -H "X-Oxy-Session-Id: $SESSION_ID" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"step 2"}]}'
 ```
@@ -107,7 +107,7 @@ curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
 **Expected output:**
 
 ```
-{"error":{"code":"session_terminated","message":"Agent session d5e44a86-fd8d-4dda-97b9-b8629ba0d23c has been terminated. Create a new session with POST /v1/agents/{agent_id}/sessions; do not retry with this session_id."}}
+{"error":{"code":"session_terminated","message":"Agent session 809c171d-7b75-42cc-9d82-72a5efa7c270 has been terminated. Create a new session with POST /v1/agents/{agent_id}/sessions; do not retry with this session_id."}}
 HTTP 410
 ```
 
@@ -116,8 +116,8 @@ HTTP 410
 Now guess **e**, a secret in a killed session:
 
 ```bash
-curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -H "X-Oxy-Agent-Id: $AGENT_ID" -H "X-Oxy-Session-Id: $SESSION_ID" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"deploy with ghp_'"$(openssl rand -hex 18)"'"}]}'
 ```
@@ -125,7 +125,7 @@ curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
 **Expected output:**
 
 ```
-{"error":{"code":"session_terminated","message":"Agent session d5e44a86-fd8d-4dda-97b9-b8629ba0d23c has been terminated. Create a new session with POST /v1/agents/{agent_id}/sessions; do not retry with this session_id."}}
+{"error":{"code":"session_terminated","message":"Agent session 809c171d-7b75-42cc-9d82-72a5efa7c270 has been terminated. Create a new session with POST /v1/agents/{agent_id}/sessions; do not retry with this session_id."}}
 HTTP 410
 ```
 
@@ -134,8 +134,7 @@ Still 410: the kill switch is step 4 of the flow you printed in Module 3, and DL
 Kill it a second time:
 
 ```bash
-curl -s -w '\nHTTP %{http_code}\n' -X POST localhost:8000/v1/agent-sessions/$SESSION_ID/kill \
-  -H "Authorization: Bearer $OXY_API_KEY"
+oxy -s -w '\nHTTP %{http_code}\n' -X POST localhost:8000/v1/agent-sessions/$SESSION_ID/kill
 ```
 
 **Expected output:**
@@ -150,8 +149,8 @@ HTTP 404
 Send the same request without the two session headers:
 
 ```bash
-curl -s -o /dev/null -w 'HTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -o /dev/null -w 'HTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"step 2"}]}'
 ```
 

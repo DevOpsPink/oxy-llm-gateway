@@ -15,8 +15,8 @@ One cent. Saving drops the project's keys from the gateway's cache, so the next 
 ## 2. Ask for more than the budget can cover
 
 ```bash
-curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}'
 ```
 
@@ -46,8 +46,8 @@ docker compose logs --no-log-prefix engine | grep '"budget_reserved"' | tail -1 
 The gateway set aside 3.75 cents for a single `gpt-4o` request: its estimate of the most the request could cost, worked out from the model's prices in the engine's pricing table. Against a one-cent budget that reservation cannot fit, so step 2 was refused before anything was called. A cheaper model reserves less:
 
 ```bash
-curl -s -o /dev/null -w 'HTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -o /dev/null -w 'HTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hello"}]}'
 docker compose logs --no-log-prefix engine | grep '"budget_reserved"' | tail -1 | jq -c '{amount, new_spend}'
 ```
