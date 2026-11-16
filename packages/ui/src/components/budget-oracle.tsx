@@ -169,7 +169,7 @@ export function BudgetOracle({ userEmail, industry, onBudgetSelect }: BudgetOrac
 
         {/* Recommended Budget (Big & Bold) */}
         <div className="bg-white/80 backdrop-blur-sm rounded-lg p-6 mb-4 border border-blue-200">
-          <p className="text-sm font-medium text-slate-600 mb-2">💎 Recommended Monthly Budget:</p>
+          <p className="text-sm font-medium text-slate-600 mb-2">💎 Recommended budget:</p>
           <motion.div
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -253,7 +253,7 @@ export function BudgetOracle({ userEmail, industry, onBudgetSelect }: BudgetOrac
               className="mt-4 space-y-2"
             >
               <Label htmlFor="custom-budget" className="text-sm font-medium text-slate-700">
-                Custom Monthly Budget
+                Custom budget
               </Label>
               <div className="flex gap-2">
                 <div className="relative flex-1">
@@ -305,7 +305,7 @@ export function BudgetOracle({ userEmail, industry, onBudgetSelect }: BudgetOrac
               <li>Requests are atomic (no race conditions)</li>
               <li>You'll receive alerts at 75%, 90%, and 100% usage</li>
               <li>API requests stop automatically when limit is reached</li>
-              <li>Budget resets monthly (or adjust anytime in settings)</li>
+              <li>The budget is a total: nothing resets it. Raise it in Project Settings when the project needs more</li>
             </ul>
           </div>
         </div>
