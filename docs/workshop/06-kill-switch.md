@@ -57,8 +57,8 @@ echo "session $SESSION_ID"
 **Expected output:**
 
 ```
-agent   dcca0439-45a5-4d1d-aead-2cf0b4e8c25e
-session 809c171d-7b75-42cc-9d82-72a5efa7c270
+agent   b6c8aef0-5512-4299-b392-40c792cf70b0
+session fc1d2ca7-9a0e-4c6b-b04b-8b77729e766b
 ```
 
 The `X-CSRF-Token` header and the `csrf_token` cookie carry the same value. The engine asks for that pair on every change made with a signed-in session, so that a page on another site cannot make the change through your browser. Any value works as long as the two match.
@@ -107,7 +107,7 @@ oxy -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
 **Expected output:**
 
 ```
-{"error":{"code":"session_terminated","message":"Agent session 809c171d-7b75-42cc-9d82-72a5efa7c270 has been terminated. Create a new session with POST /v1/agents/{agent_id}/sessions; do not retry with this session_id."}}
+{"error":{"code":"session_terminated","message":"Agent session fc1d2ca7-9a0e-4c6b-b04b-8b77729e766b has been terminated. Create a new session with POST /v1/agents/{agent_id}/sessions; do not retry with this session_id."}}
 HTTP 410
 ```
 
@@ -125,7 +125,7 @@ oxy -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
 **Expected output:**
 
 ```
-{"error":{"code":"session_terminated","message":"Agent session 809c171d-7b75-42cc-9d82-72a5efa7c270 has been terminated. Create a new session with POST /v1/agents/{agent_id}/sessions; do not retry with this session_id."}}
+{"error":{"code":"session_terminated","message":"Agent session fc1d2ca7-9a0e-4c6b-b04b-8b77729e766b has been terminated. Create a new session with POST /v1/agents/{agent_id}/sessions; do not retry with this session_id."}}
 HTTP 410
 ```
 
