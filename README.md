@@ -43,8 +43,11 @@ The first build takes a few minutes. No `.env` file, cloud account or provider k
 Sign in at <http://localhost:3000/login> with any email address and open the magic link in Mailpit. During onboarding, add a provider key (OpenAI, Anthropic or Gemini), or add it later in Settings; until a provider is connected the dashboard shows demo data. Then create an API key in the dashboard and send a request:
 
 ```bash
-curl -X POST http://localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" \
+# curl reads the key from its standard input (--config -), so it never stands on
+# curl's command line, where any user of the machine could read it with ps.
+oxy() { printf 'header = "Authorization: Bearer %s"\n' "$OXY_API_KEY" | curl --config - "$@"; }
+
+oxy -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4.1-mini",
@@ -70,21 +73,24 @@ In a terminal:
 
 <!-- codespace-requests:start -->
 ```bash
+# curl reads the key from its standard input (--config -), so it never stands on
+# curl's command line, where any user of the machine could read it with ps.
+oxy() { printf 'header = "Authorization: Bearer %s"\n' "$OXY_API_KEY" | curl --config - "$@"; }
+
 # 1. A request through the gateway; the fake provider answers
-curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hello"}]}'
 
 # 2. The same request carrying a GitHub token, made up on the spot: DLP refuses it (451)
-curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"deploy with ghp_'"$(openssl rand -hex 18)"'"}]}'
 
 # 3. Kill the demo agent session, then send one more request in it (410)
-curl -s -w '\nHTTP %{http_code}\n' -X POST localhost:8000/v1/agent-sessions/$OXY_SESSION_ID/kill \
-  -H "Authorization: Bearer $OXY_API_KEY"
-curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -w '\nHTTP %{http_code}\n' -X POST localhost:8000/v1/agent-sessions/$OXY_SESSION_ID/kill
+oxy -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -H "X-Oxy-Agent-Id: $OXY_AGENT_ID" -H "X-Oxy-Session-Id: $OXY_SESSION_ID" \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"next step"}]}'
 ```

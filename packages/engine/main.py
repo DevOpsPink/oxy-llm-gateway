@@ -664,7 +664,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title="Oxy Engine API", 
-    version="1.0.3",
+    version="1.0.4",
     description="""
 # Oxy Engine - AI Control Plane
 
@@ -2670,7 +2670,7 @@ async def health(request: Request):
     """
     health_status = {
         "status": "active",
-        "version": "1.0.3",
+        "version": "1.0.4",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     

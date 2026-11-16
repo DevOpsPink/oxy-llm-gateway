@@ -35,7 +35,10 @@ services:
           cpus: '0.25'
           memory: 256M
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      # The password reaches redis-cli through REDISCLI_AUTH, from the container's
+      # environment ($$ keeps compose from writing it into the command), and only
+      # PONG counts: redis-cli exits 0 on NOAUTH and WRONGPASS too.
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli --no-auth-warning ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -59,20 +62,24 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_dev_password}
       # Optional: PostgREST's password. Left empty, the first boot generates one.
       AUTHENTICATOR_PASSWORD: ${AUTHENTICATOR_PASSWORD:-}
-      # Used by supabase-compat.sql via current_setting('app.vault_key').
-      # Override SUPABASE_VAULT_KEY in .env for anything beyond local dev.
+      # The vault's AES key (supabase-compat.sql reads current_setting('app.vault_key')).
+      # Set it in .env for anything beyond local dev. It reaches Postgres through
+      # postgresql.auto.conf (db/00-vault-key.sh, db/postgres-entrypoint.sh), never
+      # through the command line, which `ps` shows to every user of the host.
+      SUPABASE_VAULT_KEY: ${SUPABASE_VAULT_KEY:-oxy-local-vault-dev-key-please-override-in-prod}
       POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
-    # The shared secrets volume starts root-owned; the init scripts run as postgres.
-    entrypoint: ["/bin/sh", "-c", "mkdir -p /run/oxy-secrets && chown postgres:postgres /run/oxy-secrets && exec docker-entrypoint.sh \"$$@\"", "--"]
+    entrypoint: ["/bin/sh", "/usr/local/bin/oxy-postgres-entrypoint.sh"]
     command: >
       postgres
         -c shared_preload_libraries=pg_stat_statements
-        -c app.vault_key=${SUPABASE_VAULT_KEY:-oxy-local-vault-dev-key-please-override-in-prod}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Init scripts run in lexicographic order on a fresh data dir:
       #   01-compat.sql  -> roles, auth schema, vault schema
       #   02-schema.sql  -> the golden schema referencing the above
+      - ./db/postgres-entrypoint.sh:/usr/local/bin/oxy-postgres-entrypoint.sh:ro
+      #   00-vault-key       -> the vault key, into postgresql.auto.conf
+      - ./db/00-vault-key.sh:/docker-entrypoint-initdb.d/00-vault-key.sh:ro
       - ./db/supabase-compat.sql:/docker-entrypoint-initdb.d/01-compat.sql:ro
       - ./db/schema.sql:/docker-entrypoint-initdb.d/02-schema.sql:ro
       #   03-authenticator   -> PostgREST's password, generated per install
@@ -484,7 +491,9 @@ services:
     restart: unless-stopped
     # Keep custom Redis healthcheck for this worker, it is valid
     healthcheck:
-      test: ["CMD", "python", "-c", "import redis; r = redis.from_url('redis://:${REDIS_PASSWORD:-devpassword123}@redis:6379/0'); r.ping()"]
+      # REDIS_URL from the container's environment: a URL written into the test
+      # would put the password on the command line of every check.
+      test: ["CMD", "python", "-c", "import os, redis; redis.from_url(os.environ['REDIS_URL']).ping()"]
       interval: 60s
       timeout: 10s
       retries: 3
@@ -545,7 +554,9 @@ services:
           memory: 256M
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import redis; r = redis.from_url('redis://:${REDIS_PASSWORD:-devpassword123}@redis:6379/0'); r.ping()"]
+      # REDIS_URL from the container's environment: a URL written into the test
+      # would put the password on the command line of every check.
+      test: ["CMD", "python", "-c", "import os, redis; redis.from_url(os.environ['REDIS_URL']).ping()"]
       interval: 60s
       timeout: 10s
       retries: 3

@@ -82,10 +82,13 @@ Connect a provider key in onboarding or **Settings**. For an org-wide key instea
 Then issue a request through the gateway with the `OXY_API_KEY` from your dashboard:
 
 ```bash
-export OXY_API_KEY="oxy_live_..."
+read -rs OXY_API_KEY && export OXY_API_KEY   # paste the key; it is not echoed or kept in history
 
-curl -X POST http://localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" \
+# curl reads the key from its standard input (--config -), so it never stands on
+# curl's command line, where any user of the machine could read it with ps.
+oxy() { printf 'header = "Authorization: Bearer %s"\n' "$OXY_API_KEY" | curl --config - "$@"; }
+
+oxy -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4.1-mini",

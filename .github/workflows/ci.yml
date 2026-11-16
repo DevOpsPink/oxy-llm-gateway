@@ -113,11 +113,35 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: No secret on a command line, in any compose stack (shown the 1.0.3 forms first)
+        run: |
+          python3 scripts/argv_secrets.py selftest
+          python3 scripts/argv_secrets.py static
+
       - name: Start the stack exactly as the README says
         run: docker compose up -d --build --wait --wait-timeout 600
 
       - name: Smoke test
         run: bash scripts/stack_smoke.sh
+
+      - name: No secret on a command line while the stack runs
+        run: python3 scripts/argv_secrets.py runtime
+
+      - name: The vault key reaches Postgres without a command line, on the first boot and on a restart
+        run: |
+          vault_key_ok() {
+            docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -v ON_ERROR_STOP=1' <<'SQL'
+          \getenv k SUPABASE_VAULT_KEY
+          SELECT current_setting('app.vault_key', true) = :'k';
+          SQL
+          }
+          [ "$(vault_key_ok)" = t ] || { echo "FAIL: app.vault_key is not the configured key after the first boot"; exit 1; }
+          docker compose restart postgres
+          docker compose up -d --wait --wait-timeout 120 postgres
+          [ "$(vault_key_ok)" = t ] || { echo "FAIL: app.vault_key is not the configured key after a restart"; exit 1; }
+          lines="$(docker compose exec -T postgres sh -c 'grep -c "^app.vault_key" "$PGDATA/postgresql.auto.conf"')"
+          [ "$lines" = 1 ] || { echo "FAIL: postgresql.auto.conf holds $lines app.vault_key lines"; exit 1; }
+          echo "app.vault_key is the configured key after the first boot and after a restart, set once in postgresql.auto.conf"
 
       - name: Logs on failure
         if: failure()

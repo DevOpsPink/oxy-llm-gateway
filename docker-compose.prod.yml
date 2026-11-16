@@ -23,6 +23,10 @@ services:
       --timeout 300
       --tcp-keepalive 300
       --supervised no
+    environment:
+      # For the health check (REDISCLI_AUTH); redis-server rewrites its own
+      # command line at start, so --requirepass above does not stay in `ps`.
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
       - redis_logs:/var/log/redis
@@ -40,7 +44,10 @@ services:
         max_attempts: 3
         window: 120s
     healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      # The password reaches redis-cli through REDISCLI_AUTH, from the container's
+      # environment ($$ keeps compose from writing it into the command), and only
+      # PONG counts: redis-cli exits 0 on NOAUTH and WRONGPASS too.
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli --no-auth-warning ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -359,7 +366,9 @@ services:
     restart: unless-stopped
     # Keep custom Redis healthcheck for this worker
     healthcheck:
-      test: ["CMD", "python", "-c", "import redis; r = redis.from_url('redis://:${REDIS_PASSWORD}@redis:6379/0'); r.ping()"]
+      # REDIS_URL from the container's environment: a URL written into the test
+      # would put the password on the command line of every check.
+      test: ["CMD", "python", "-c", "import os, redis; redis.from_url(os.environ['REDIS_URL']).ping()"]
       interval: 60s
       timeout: 10s
       retries: 3
@@ -437,7 +446,9 @@ services:
         window: 120s
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import redis; r = redis.from_url('redis://:${REDIS_PASSWORD}@redis:6379/0'); r.ping()"]
+      # REDIS_URL from the container's environment: a URL written into the test
+      # would put the password on the command line of every check.
+      test: ["CMD", "python", "-c", "import os, redis; redis.from_url(os.environ['REDIS_URL']).ping()"]
       interval: 60s
       timeout: 10s
       retries: 3
@@ -513,6 +524,14 @@ services:
       - caddy_config:/config
     environment:
       - DOMAIN=${DOMAIN:-localhost}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
     depends_on:
       - engine
       - ui
@@ -540,6 +559,14 @@ services:
       - '--storage.tsdb.retention.time=30d'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     networks:
       - backend
     logging:
@@ -563,6 +590,14 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=https://${DOMAIN}/grafana/
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
     depends_on:
       - prometheus
     networks:
