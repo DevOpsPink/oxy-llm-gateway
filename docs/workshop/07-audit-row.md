@@ -47,12 +47,12 @@ from request_logs order by created_at desc limit 6;"
 ```
    time   |    model    | status  |    threat_type     | cost_usd | latency_ms | privacy_mode
 ----------+-------------+---------+--------------------+----------+------------+---------------
- 04:17:07 | gpt-4o-mini | mock    | none               | 0.000004 |          9 | metadata_only
- 04:17:07 | gpt-4o-mini | blocked | session_terminated | 0.000000 |          5 | metadata_only
- 04:17:07 | gpt-4o-mini | blocked | session_terminated | 0.000000 |          7 | metadata_only
- 04:17:07 | gpt-4o-mini | mock    | none               | 0.000004 |         18 | metadata_only
- 04:17:06 | gpt-4o-mini | mock    | none               | 0.000004 |         11 | metadata_only
- 04:17:06 | gpt-4o-mini | blocked | credit_card        | 0.000000 |          7 | metadata_only
+ 16:35:02 | gpt-4o-mini | mock    | none               | 0.000004 |          9 | metadata_only
+ 16:35:01 | gpt-4o-mini | blocked | session_terminated | 0.000000 |          5 | metadata_only
+ 16:35:01 | gpt-4o-mini | blocked | session_terminated | 0.000000 |          5 | metadata_only
+ 16:35:01 | gpt-4o-mini | mock    | none               | 0.000004 |         14 | metadata_only
+ 16:35:01 | gpt-4o-mini | mock    | none               | 0.000004 |         11 | metadata_only
+ 16:35:01 | gpt-4o-mini | blocked | credit_card        | 0.000000 |          7 | metadata_only
 (6 rows)
 ```
 
@@ -90,13 +90,13 @@ oxy -s "localhost:8000/v1/requests?limit=2" | jq '.items[] | {created_at, model,
 
 ```
 {
-  "created_at": "2026-11-16T04:17:07.43203+00:00",
+  "created_at": "2026-11-16T16:35:02.130528+00:00",
   "model": "gpt-4o-mini",
   "status": "mock",
   "cost_usd": 0.000004
 }
 {
-  "created_at": "2026-11-16T04:17:07.279572+00:00",
+  "created_at": "2026-11-16T16:35:01.975333+00:00",
   "model": "gpt-4o-mini",
   "status": "blocked",
   "cost_usd": 0.0
@@ -113,8 +113,8 @@ oxy -s localhost:8000/v1/exports/requests.csv | head -3
 
 ```
 id,created_at,provider,model,status,latency_ms,prompt_tokens,completion_tokens,total_tokens,cost_usd,project_id
-26ec4944-d403-4268-891e-a8a672108d03,2026-11-16T04:17:07.43203+00:00,openai,gpt-4o-mini,mock,9,10,5,15,4e-06,698a7f6e-19c3-48e5-8893-8d7321d4dcd0
-fb3e9619-6299-4426-b657-0ef683434afd,2026-11-16T04:17:07.279572+00:00,blocked,gpt-4o-mini,blocked,5,0,0,0,0.0,698a7f6e-19c3-48e5-8893-8d7321d4dcd0
+37f3d9fd-8adc-4d59-b0d3-30fe0dec34e0,2026-11-16T16:35:02.130528+00:00,openai,gpt-4o-mini,mock,9,10,5,15,4e-06,34d90aef-195c-4ce6-83ef-5343bb45a02f
+d858e8c6-a48e-487a-ab8c-e243ef1b24bf,2026-11-16T16:35:01.975333+00:00,blocked,gpt-4o-mini,blocked,5,0,0,0,0.0,34d90aef-195c-4ce6-83ef-5343bb45a02f
 ```
 
 The API and the export give the status of each request; the reason for a refusal (`threat_type`) is in the row itself, as in step 1.
