@@ -7,7 +7,7 @@ import { Github, ArrowLeft, Check, Minus } from 'lucide-react'
 export const metadata: Metadata = {
   title: 'Plan limits — Oxy',
   description:
-    'Default plan limits enforced by the Oxy gateway. Plan tiers are quota levels an operator assigns in the database: request caps, project quotas, and team-member counts per tier.',
+    'Default plan limits enforced by the Oxy gateway. Plan tiers are quota levels an operator assigns in the database: project, agent and team-member caps per tier. No tier caps requests.',
 }
 
 const REPO_URL = 'https://github.com/heyvaldemar/oxy-llm-gateway'
@@ -83,8 +83,8 @@ export default function PlanLimitsPage() {
           <h1 className="mt-3 text-3xl md:text-4xl font-semibold tracking-tight">Plan limits</h1>
           <p className="mt-4 text-slate-600 leading-relaxed">
             Oxy ships with a built-in plan system: each organisation has a <code className="text-sm bg-slate-100 px-1.5 py-0.5 rounded">plan_tier</code>{' '}
-            column, and the gateway enforces per-month request caps plus a handful of other quotas
-            based on that column. Tiers are quota levels the operator assigns in the database.
+            column, and the gateway caps projects, agents and team members based on that column.
+            Tiers are quota levels the operator assigns in the database.
             These are the defaults; tune them in code for your own deployment.
           </p>
           <p className="mt-3 text-slate-600 leading-relaxed">
