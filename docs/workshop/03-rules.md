@@ -83,7 +83,7 @@ grep -n "nothing resets it" README.md | cut -c1-120
 **Expected output:**
 
 ```
-203:- **A budget is the project's total spend**, not a monthly allowance: nothing resets it. The Redis counter is the le
+211:- **A budget is the project's total spend**, not a monthly allowance: nothing resets it. The Redis counter is the le
 ```
 
 A budget belongs to a project, and every key of the project spends from it. It is a total, not a monthly allowance. Read the whole line in the README's [Scope and honest limitations](../../README.md#scope-and-honest-limitations): it also says how far the dashboard's spend figure can lag behind.

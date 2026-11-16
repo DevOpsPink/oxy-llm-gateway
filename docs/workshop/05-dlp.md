@@ -12,8 +12,8 @@ The secrets below are made up on the spot with `openssl rand`, so no real token 
 Your project's budget is still one cent from Module 4, and a `gpt-4o` request does not fit in it. Send one with a GitHub token in it:
 
 ```bash
-curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o","messages":[{"role":"user","content":"deploy with ghp_'"$(openssl rand -hex 18)"'"}]}'
 ```
 
@@ -31,8 +31,8 @@ HTTP 451
 On the Control Plane, **Settings** → **Budget limit, total spend ($)** → `10.00` → **Save Changes**. The same `gpt-4o` request without the token now goes through at once:
 
 ```bash
-curl -s -o /dev/null -w 'HTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -o /dev/null -w 'HTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o","messages":[{"role":"user","content":"deploy"}]}'
 ```
 
@@ -47,8 +47,8 @@ HTTP 200
 Now the budget has room. Send a GitHub token again (`openssl` makes a new one each time):
 
 ```bash
-curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"deploy with ghp_'"$(openssl rand -hex 18)"'"}]}'
 ```
 
@@ -64,8 +64,8 @@ That is guess **b**: the budget makes no difference to DLP. The `hint` tells the
 A card number, in the usual groups of four (this one is the well-known test number, not a real card):
 
 ```bash
-curl -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -w '\nHTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"charge 4111 1111 1111 1111 for the order"}]}'
 ```
 
@@ -81,8 +81,8 @@ HTTP 451
 An email address is not one of the ten patterns:
 
 ```bash
-curl -s -o /dev/null -w 'HTTP %{http_code}\n' localhost:8000/v1/chat/completions \
-  -H "Authorization: Bearer $OXY_API_KEY" -H 'Content-Type: application/json' \
+oxy -s -o /dev/null -w 'HTTP %{http_code}\n' localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"reply to you@example.com"}]}'
 ```
 

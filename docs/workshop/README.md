@@ -34,7 +34,7 @@ lsof -nP -iTCP -sTCP:LISTEN | grep -E ':(3000|8000|8025|8080) '
 
 No output means the ports are free. If something is listed, stop it for the length of the lab, or see "Common gotchas" in [`docs/getting-started/quickstart.md`](../getting-started/quickstart.md).
 
-Use one terminal for the whole lab, opened in the repository folder. The modules keep values such as your key in shell variables, and a new terminal starts without them.
+Use one terminal for the whole lab, opened in the repository folder. The modules keep your key and, later, a signed-in session in shell variables, with two small functions that hand them to curl, and a new terminal starts without any of them.
 
 ## How the modules read
 
@@ -42,7 +42,7 @@ Every command block is meant to be copied as it is. The block after it, marked *
 
 ## Tested on
 
-Oxy [v1.0.3](https://github.com/heyvaldemar/oxy-llm-gateway/releases/tag/v1.0.3), on 2026-11-15: a clean Docker host (Docker Engine 29.9.3, Compose 5.7.1), every command in zsh 5.9, the browser steps in Chromium 140. Module 1 checks out that tag, so the commands keep matching their output when `main` moves on.
+Oxy [v1.0.4](https://github.com/heyvaldemar/oxy-llm-gateway/releases/tag/v1.0.4), on 2026-11-16: a clean Docker host (Docker Engine 29.9.3, Compose 5.7.1), every command in zsh 5.9, the browser steps in Chromium 140. Module 1 checks out that tag, so the commands keep matching their output when `main` moves on.
 
 ## When you are done
 
