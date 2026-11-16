@@ -55,7 +55,6 @@ import { FadeIn, SlideIn, StaggerContainer, StaggerItem, HoverScale } from '@/co
 import { BudgetOracle } from '@/components/budget-oracle'
 import { CelebrationModal } from '@/components/dashboard/celebration-modal'
 import { useAchievements } from '@/hooks/useAchievements'
-import { PlanLimitModal, type PlanTier } from '@/components/plan-limit-modal'
 import { CountUp, AnimatedCurrency } from '@/components/ui/count-up'
 
 // ============================================================================
@@ -152,7 +151,6 @@ export default function DashboardPage() {
   
   // Demo mode: sample data until a provider is connected
   const [isDemoMode, setIsDemoMode] = useState(false)
-  const [userSubscriptionTier, setUserSubscriptionTier] = useState<string | null>(null)
 
   // UI States
   const [isCopied, setIsCopied] = useState(false)
@@ -164,9 +162,6 @@ export default function DashboardPage() {
   // Referral link comes from the API (not hardcoded)
   const [referralLink, setReferralLink] = useState<string | null>(null)
   const [referralCode, setReferralCode] = useState<string | null>(null)
-  
-  // Plan-limit notice, shown when the org's monthly request cap is reached
-  const [showLimitHitModal, setShowLimitHitModal] = useState(false)
   
   // Form States
   const [currentProject, setCurrentProject] = useState<Project | null>(null)
@@ -198,24 +193,15 @@ export default function DashboardPage() {
       return 'Subscription required'
     }
 
-    // Handle 429 Budget Exceeded
+    // 429 is a rate limit: calls came faster than allowed. No plan tier caps
+    // requests (since 1.0.1), and a spent budget answers 402, so a 429 is
+    // neither of those.
     if (res.status === 429) {
-      const errorText = await res.text()
-      
-      // Detect plan request-cap responses and show the plan-limit notice
-      if (errorText.includes("limit reached") || errorText.includes("Free tier limit") || errorText.includes("requests/month")) {
-        setShowLimitHitModal(true)
-      }
-      
-      toast.error('Budget Exceeded! Your project has reached its spending limit.', {
-        description: 'Increase your budget in Settings to continue using the API.',
-        action: {
-          label: 'Increase Budget',
-          onClick: () => router.push('/settings')
-        },
+      toast.error('Too many requests', {
+        description: 'Calls came faster than the limit allows. Wait a moment and try again.',
         duration: 10000, // Show for 10 seconds
       })
-      return 'Budget limit exceeded'
+      return 'Rate limited'
     }
 
     // Handle 403 Forbidden (permissions)
@@ -488,20 +474,6 @@ export default function DashboardPage() {
           await fetchProjects()
         }
 
-        // Fetch user subscription tier for premium features
-        try {
-          const billingRes = await fetch(`${apiUrl}/billing/subscription-status`, {
-            headers: { 'Authorization': `Bearer ${session.access_token}` }
-          })
-          if (billingRes.ok) {
-            const billingData = await billingRes.json()
-            setUserSubscriptionTier(billingData.plan_tier || null)
-          }
-        } catch (e) {
-          // Subscription fetch failed - default to free tier
-          setUserSubscriptionTier(null)
-        }
-        
         // Fetch the referral link from the API (not hardcoded)
         try {
           const referralRes = await fetch(`${apiUrl}/management/credits/referral-link`, {
@@ -897,11 +869,6 @@ export default function DashboardPage() {
   }
 
   if (!user) return null
-
-  const PLAN_TIERS: PlanTier[] = ['free', 'starter', 'growth', 'business', 'enterprise']
-  const currentPlanTier: PlanTier = PLAN_TIERS.includes(userSubscriptionTier as PlanTier)
-    ? (userSubscriptionTier as PlanTier)
-    : 'free'
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -1465,13 +1432,6 @@ export default function DashboardPage() {
           onClose={clearNewAchievement}
         />
       )}
-
-      {/* Plan-limit notice: shown when the org hits its monthly request cap */}
-      <PlanLimitModal 
-        currentPlan={currentPlanTier}
-        isOpen={showLimitHitModal}
-        onClose={() => setShowLimitHitModal(false)}
-      />
 
     </div>
   )
