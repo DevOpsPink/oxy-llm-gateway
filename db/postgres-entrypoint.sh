@@ -8,7 +8,7 @@ mkdir -p /run/oxy-secrets
 chown postgres:postgres /run/oxy-secrets
 
 # The vault key reaches Postgres through postgresql.auto.conf, written from
-# SUPABASE_VAULT_KEY: on the first boot by 00-vault-key.sh (ALTER SYSTEM), on
+# SUPABASE_VAULT_KEY: on the first boot by 00-vault-key.sh (the same awk), on
 # every later boot here, so a database made before 1.0.4 keeps its key. Never
 # `postgres -c app.vault_key=...`: the postmaster's command line is in `ps` for
 # every user of the host. awk reads the key from its environment, not its argv.
