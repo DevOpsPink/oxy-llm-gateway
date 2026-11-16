@@ -1,5 +1,6 @@
 # --- 1. SECRETS & LOCAL CONFIGS ---
 # Ignore all .env files EVERYWHERE.
+.env
 **/.env
 **/.env.local
 **/.env.*.local

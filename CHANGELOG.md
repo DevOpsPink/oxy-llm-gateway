@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.4 — 2026-11-16
+## [1.0.4] - 2026-11-16
 
 No secret on a command line. A gateway that sells DLP and an audit trail kept its own Redis password and vault key where any user of the host could read them with `ps`. Found by the fleet's conformance check.
 
@@ -15,7 +15,7 @@ No secret on a command line. A gateway that sells DLP and an audit trail kept it
 
 - `scripts/argv_secrets.py` renders every compose stack with a random value planted in each secret-named variable and fails when one lands in a command, an entrypoint or a health check; on 1.0.3's compose files it finds all twelve. Its self-test plants the 1.0.3 forms back and must catch each. On the running stack it freezes Redis, runs every health check by hand so each stays in flight, and samples the host's `ps` five times a second for every secret the stack was given; a canary in a container's command line must be seen first. CI also requires the vault key to be the configured one after the first boot and after a restart, set once.
 
-## 1.0.3 — 2026-11-15
+## [1.0.3] - 2026-11-15
 
 The audit trail keeps its promise: every request made with a valid key has a `request_logs` row, refusals included, and revoking a key no longer erases its rows. Found while writing the workshop lab.
 
@@ -30,7 +30,7 @@ The audit trail keeps its promise: every request made with a valid key has a `re
 
 - Threats Blocked counted every request: served requests are recorded as "safe", and anything but "none" counted as a threat. Only what DLP or the stream scanner finds counts now; refusals by the budget, the kill switch, the burst limit or a suspended organization are not threats.
 
-## 1.0.2 — 2026-11-15
+## [1.0.2] - 2026-11-15
 
 A fix release: the dashboard's budget and project buttons work, deleting a project keeps its audit trail, and Dependabot keeps the dependencies current on its own.
 
@@ -55,7 +55,7 @@ A fix release: the dashboard's budget and project buttons work, deleting a proje
 - Eight navigations to the app's own pages went through `window.location.href` (the error pages, the offline page, the playground, the SSO panel, sign-out); they use the Next router, which `eslint-config-next` 16.4 requires. The error card's Dashboard button clears the error before it navigates.
 - The devcontainer's proxy could start before the dashboard's container existed and stop with `host not found in upstream "ui"`, failing the devcontainer job at random; it now waits for that container to start.
 
-## 1.0.1 — 2026-11-15
+## [1.0.1] - 2026-11-15
 
 ### License
 
@@ -86,7 +86,7 @@ A fix release: the dashboard's budget and project buttons work, deleting a proje
 - The README says which CI run its proof numbers and the walkthrough recording come from.
 - Two co-authors and maintainers on equal terms: the README's Authors section and `MAINTAINERS.md`.
 
-## 1.0.0 — 2026-11-15
+## [1.0.0] - 2026-11-15
 
 Oxy is a self-hosted LLM gateway: a FastAPI engine with an OpenAI-compatible `/v1/chat/completions` endpoint, a Next.js dashboard, and Postgres with PostgREST and GoTrue for data and sign-in. It puts budgets, DLP, a kill switch, audit logs and cost attribution in front of OpenAI, Anthropic, Gemini and local models. It is an Apache 2.0 reference implementation.
 
