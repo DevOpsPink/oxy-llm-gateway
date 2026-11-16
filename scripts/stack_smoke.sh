@@ -109,12 +109,25 @@ REPLY="$(printf 'header = "Authorization: Bearer %s"\n' "$OXY_API_KEY" | curl_h 
 [ "$REPLY" = "pong from Oxy Gateway" ] || fail "gateway answered '$REPLY'"
 echo "gateway answered: $REPLY"
 
+step "the key's last use reaches the API Keys page"
+# The gateway writes api_keys.last_used_at in the background, once a minute at
+# most; before 1.0.5 nothing wrote it and the page said "Never" for every key.
+session() { printf 'header = "Authorization: Bearer %s"\n' "$ACCESS_TOKEN"; }
+PROJECT_ID="$(session | curl_h "$API_URL/management/projects" | json "d[0]['id']")"
+LAST_USED=""
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  LAST_USED="$(session | curl_h "$API_URL/management/keys?projectId=$PROJECT_ID" \
+    | json "next((k['last_used_at'] for k in d if k.get('last_used_at')), '')")"
+  [ -n "$LAST_USED" ] && break
+  sleep 1
+done
+[ -n "$LAST_USED" ] || fail "the key that just made a request still shows no last use"
+echo "the key's last use is on the API Keys page"
+
 step "the dashboard's project buttons write the database"
 # Set Budget Limit, Delete and Create New Project, called the way the dashboard
 # calls them. In v1.0.1 all three answered 500: they called database functions
 # the schema never had, and nothing here wrote through them.
-session() { printf 'header = "Authorization: Bearer %s"\n' "$ACCESS_TOKEN"; }
-PROJECT_ID="$(session | curl_h "$API_URL/management/projects" | json "d[0]['id']")"
 code="$(session | curl_h -o /dev/null -w '%{http_code}' -X PUT "$API_URL/management/project/$PROJECT_ID" \
   -H "X-CSRF-Token: $CSRF" -b "csrf_token=$CSRF" -H 'Content-Type: application/json' \
   --data '{"name":"Smoke budget","budget_limit":"12.50"}')"

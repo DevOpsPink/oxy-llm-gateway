@@ -27,6 +27,9 @@ type Project = { id: string; name: string }
 // Keys are managed with the dashboard session through the /management
 // endpoints (the same ones the main dashboard uses). /v1/api-keys takes an
 // Oxy API key, not a session, so it cannot serve this page.
+// A timestamp from the API in the reader's own time zone and format.
+const when = (iso?: string | null) => (iso ? new Date(iso).toLocaleString() : null)
+
 export default function ApiKeysPage() {
   const supabase = useMemo(() => createClient(), [])
   const apiUrl = process.env.NEXT_PUBLIC_API_URL
@@ -163,8 +166,8 @@ export default function ApiKeysPage() {
                   {k.is_active !== false ? 'Active' : 'Inactive'}
                 </Badge>
               </TableCell>
-              <TableCell className="text-xs text-muted-foreground">{k.created_at || '—'}</TableCell>
-              <TableCell className="text-xs text-muted-foreground">{k.last_used_at || 'Never'}</TableCell>
+              <TableCell className="text-xs text-muted-foreground">{when(k.created_at) ?? '—'}</TableCell>
+              <TableCell className="text-xs text-muted-foreground">{when(k.last_used_at) ?? 'Never'}</TableCell>
               <TableCell>
                 {k.is_active !== false && (
                   <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); revokeKey(k.id) }}>
