@@ -58,6 +58,8 @@ To check the whole path without a provider key, run the same end-to-end test CI 
 bash scripts/stack_smoke.sh
 ```
 
+To go further by hand, the [workshop](docs/workshop/README.md) is a lab of about 80 minutes that starts from this quickstart and has you meet each control: a request the budget cannot cover, a secret stopped by DLP, a killed agent session, a revoked key, and the audit row each one leaves.
+
 ## Try it in a Codespace
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/heyvaldemar/oxy-llm-gateway?quickstart=1)
