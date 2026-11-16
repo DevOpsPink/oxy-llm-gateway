@@ -4,6 +4,10 @@
 
 services:
   redis:
+    restart: unless-stopped
+    # Time to write its data out (Redis AOF/RDB, Postgres checkpoint) before
+    # Docker kills it; the default 10 s can cut a large save short.
+    stop_grace_period: 30s
     image: docker.io/library/redis:7.4.12-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
     ports:
       - "127.0.0.1:6379:6379"
@@ -66,6 +70,7 @@ services:
       - /tmp
 
   engine:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile.engine
@@ -466,6 +471,7 @@ services:
       - ALL
 
   ui:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile.ui
