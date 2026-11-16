@@ -303,7 +303,7 @@ export function BudgetOracle({ userEmail, industry, onBudgetSelect }: BudgetOrac
             <p className="font-semibold text-slate-900">💡 How budget protection works:</p>
             <ul className="space-y-0.5 ml-4 list-disc">
               <li>Requests are atomic (no race conditions)</li>
-              <li>You'll receive alerts at 75%, 90%, and 100% usage</li>
+              <li>Alerts at 80%, 95% and 100% of the budget, by email when the operator has set it up</li>
               <li>API requests stop automatically when limit is reached</li>
               <li>The budget is a total: nothing resets it. Raise it in Project Settings when the project needs more</li>
             </ul>
