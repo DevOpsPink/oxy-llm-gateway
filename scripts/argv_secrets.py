@@ -185,11 +185,13 @@ def runtime():
             time.sleep(0.2)
 
     try:
-        # The canary: a process in a container whose command line carries it.
-        compose("exec", "-d", "-T", "redis", "sh", "-c", "sleep 15", canary)
-        sample(3)
+        # The canary: a process in a container whose command line carries it. Two
+        # commands, so the shell stays: with one, sh execs it and $0 is gone.
+        started = compose("exec", "-d", "-T", "redis", "sh", "-c", "sleep 20; true", canary)
+        sample(4)
         if canary not in seen:
-            print("FAIL: the sampler did not see the canary in a container's command line; it proves nothing")
+            print("FAIL: the sampler did not see the canary in a container's command line; it proves nothing"
+                  + ("" if started.returncode == 0 else " (starting it failed: %s)" % started.stderr.strip()[:200]))
             return 1
         # Redis frozen, every other service's health check run by hand: each one
         # blocks on Redis and stays on the process table while ps is read.
