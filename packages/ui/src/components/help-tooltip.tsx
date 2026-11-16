@@ -94,7 +94,7 @@ export function InfoTooltip({
 export const HelpTooltips = {
   // Budget & Billing
   budgetLimit: () => (
-    <HelpTooltip content="Maximum amount you'll spend per month. API requests stop when limit is reached to prevent surprise bills." />
+    <HelpTooltip content="The most this project can spend in total; nothing resets it. Requests are refused once it is spent, so there is no surprise bill." />
   ),
   
   currentSpend: () => (
