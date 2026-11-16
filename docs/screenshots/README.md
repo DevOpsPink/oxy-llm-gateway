@@ -13,7 +13,7 @@ Eight images, all 1440×900 (Retina) or 2880×1800 for high-DPI. Drop them in th
 | `landing-architecture.png` | Architecture mini-diagram + tech stack section | scroll further on `/` |
 | `dashboard-overview.png` | Dashboard home for a signed-in user with some seeded usage data | `http://localhost:3000/dashboard` |
 | `dashboard-api-keys.png` | API keys management page with at least one key present | `http://localhost:3000/dashboard/api-keys` |
-| `dashboard-budgets.png` | Billing/usage page showing the per-org request cap and current usage | `http://localhost:3000/dashboard/billing` |
+| `dashboard-budgets.png` | Billing/usage page showing the plan and this month's request count | `http://localhost:3000/dashboard/billing` |
 | `dashboard-agents.png` | Agents list (even empty state is fine) | `http://localhost:3000/dashboard/agents` |
 | `dashboard-playground.png` | Playground sending a `/v1/chat/completions` request and showing the streamed response | `http://localhost:3000/dashboard/playground` |
 
