@@ -547,6 +547,49 @@ async def log_request(
     )
 
 
+KEY_USE_WINDOW_SECONDS = 60
+_key_use_writes: set = set()  # references to the fire-and-forget writes, so none is collected early
+
+
+async def touch_key_last_used(key_id: Optional[str]) -> bool:
+    """Write api_keys.last_used_at for a key that just made a request, at most once
+    a minute per key; True when this call wrote it.
+
+    Nothing wrote the column before, so the dashboard's API Keys page said "Never"
+    for every key, used or not. The minute is kept in Redis (SET NX EX), so a burst
+    of requests costs one database write. When Redis or the database cannot answer,
+    the write is skipped: it never holds up or fails the request it is about.
+    """
+    if not key_id or getattr(resources, "redis", None) is None or getattr(resources, "http_client", None) is None:
+        return False
+    try:
+        first = await resources.redis.set("key_used:%s" % key_id, "1", nx=True, ex=KEY_USE_WINDOW_SECONDS)
+    except Exception:
+        return False
+    if not first:
+        return False
+    try:
+        res = await resources.http_client.patch(
+            f"{SUPABASE_URL}/rest/v1/api_keys",
+            params={"id": f"eq.{key_id}"},
+            headers=get_supabase_headers(prefer="return=minimal"),
+            json={"last_used_at": datetime.datetime.now(datetime.timezone.utc).isoformat()},
+            timeout=5.0,
+        )
+        res.raise_for_status()
+        return True
+    except Exception as e:
+        log_error_safe(log, "key_last_used_write_failed", e, key_id=key_id)
+        return False
+
+
+def note_key_use(key_id: Optional[str]) -> None:
+    """touch_key_last_used without waiting for it: the request goes on at once."""
+    task = asyncio.create_task(touch_key_last_used(key_id))
+    _key_use_writes.add(task)
+    task.add_done_callback(_key_use_writes.discard)
+
+
 async def _model_of(request: Request) -> str:
     """The model a request asked for, for the audit row of a request refused before
     its body is parsed; "unknown" when the body is not JSON or names none."""
@@ -1293,6 +1336,8 @@ async def chat_completions_proxy(
     api_key_used = creds.credentials
     # Start timer for latency_ms recording — read at each bt.add_task call site below.
     request_start_ms = time.monotonic()
+    # The key was used, refused or not: the API Keys page shows when.
+    note_key_use(key_data.get("key_id"))
 
     # Load org plan/flags if missing in cache
     if key_data.get("plan_tier") is None or key_data.get("org_paused") is None:
