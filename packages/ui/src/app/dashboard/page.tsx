@@ -1418,7 +1418,7 @@ export default function DashboardPage() {
                     />
                 </div>
                 <p id="project-budget-help" className="text-xs text-slate-500">
-                  Set a monthly spending limit. Use 0.00 for unlimited usage. Requests will be rejected once the limit is reached.
+                  The most this project can spend in total: nothing resets it. Use 0.00 for no cap. Once it is spent, requests are refused with 402 until you raise it.
                 </p>
               </div>
             )}
