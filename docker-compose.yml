@@ -8,6 +8,10 @@ x-engine-env: &engine-env
 
 services:
   redis:
+    restart: unless-stopped
+    # Time to write its data out (Redis AOF/RDB, Postgres checkpoint) before
+    # Docker kills it; the default 10 s can cut a large save short.
+    stop_grace_period: 30s
     image: docker.io/library/redis:7.4.12-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
     # SECURITY: No ports exposed - Redis accessible only within Docker network
     command: >
@@ -55,6 +59,10 @@ services:
   # vault.decrypted_secrets, plus anon/authenticated/service_role roles).
   # ==========================================================================
   postgres:
+    restart: unless-stopped
+    # Time to write its data out (Redis AOF/RDB, Postgres checkpoint) before
+    # Docker kills it; the default 10 s can cut a large save short.
+    stop_grace_period: 30s
     image: docker.io/library/postgres:16.15-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
     environment:
       POSTGRES_DB:       ${POSTGRES_DB:-oxy}
@@ -112,6 +120,7 @@ services:
   # JWT claim. JWT secret is shared with the engine via env.
   # ==========================================================================
   postgrest:
+    restart: unless-stopped
     # Use Supabase's PostgREST fork, not the upstream image. They ship custom
     # patches (notably backward-compatible aggregate syntax — `field:sum(field)`
     # rather than upstream 12's `field.sum()`) that match the dialect every
@@ -161,6 +170,7 @@ services:
   # JWT expiry 1h. Override the GOTRUE_* env vars below for production.
   # ==========================================================================
   gotrue:
+    restart: unless-stopped
     image: supabase/gotrue:v2.164.0@sha256:f8b871f46f3f9c5306af00d2fb856fb5479db730bb6d4fd2757b2da8abe953f9
     environment:
       # API surface
@@ -237,6 +247,7 @@ services:
   # dev stack it is published on 127.0.0.1 only.
   # ==========================================================================
   mailpit:
+    restart: unless-stopped
     image: axllent/mailpit:v1.33.1@sha256:aef2aacc11f075ec0fb6874275ee4a421e688e11a96ebb296134d1735c7761ce
     ports:
       - "127.0.0.1:8025:8025"
@@ -249,6 +260,7 @@ services:
       - default
 
   nginx-postgrest:
+    restart: unless-stopped
     image: docker.io/library/nginx:1.30.5-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94
     ports:
       - "127.0.0.1:8080:8080"
@@ -277,6 +289,7 @@ services:
       - default
 
   engine:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile.engine
@@ -565,6 +578,7 @@ services:
       - default
 
   ui:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile.ui
