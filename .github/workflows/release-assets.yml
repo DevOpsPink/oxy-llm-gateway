@@ -2,7 +2,9 @@ name: Release Assets
 
 # WHAT A RELEASE CARRIES, AND WHO CAN PROVE IT.
 #
-# A tag is a name, and a name can be moved. This job gives every release an archive
+# A tag is a name, and a name can be moved. Until 24 September 2026 a release
+# here was a tag and its notes, and a person deploying it had nothing to
+# check except that the tag existed. This job gives every release an archive
 # of exactly the tree the tag points at, a signature over it, and a SLSA
 # provenance statement of how it was built, all three made by this workflow
 # on GitHub's runner with a short-lived identity and no stored key:
@@ -13,25 +15,33 @@ name: Release Assets
 #
 # Verifying, from any machine, with nothing from this repository trusted:
 #
-#   cosign verify-blob oxy-llm-gateway-<tag>.tar.gz \
-#     --bundle oxy-llm-gateway-<tag>.tar.gz.sigstore.json \
-#     --certificate-identity https://github.com/heyvaldemar/oxy-llm-gateway/.github/workflows/release-assets.yml@refs/tags/<tag> \
+#   cosign verify-blob <repo>-<tag>.tar.gz \
+#     --bundle <repo>-<tag>.tar.gz.sigstore.json \
+#     --certificate-identity https://github.com/heyvaldemar/<repo>/.github/workflows/release-assets.yml@refs/tags/<tag> \
 #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
 #
-#   slsa-verifier verify-artifact oxy-llm-gateway-<tag>.tar.gz \
-#     --provenance-path oxy-llm-gateway-<tag>.intoto.jsonl \
-#     --source-uri github.com/heyvaldemar/oxy-llm-gateway --source-tag <tag>
+#   slsa-verifier verify-artifact <repo>-<tag>.tar.gz \
+#     --provenance-path <repo>-<tag>.intoto.jsonl \
+#     --source-uri github.com/heyvaldemar/<repo> --source-tag <tag>
 #
-# The signer is exact: this workflow file, run on that release's tag. A
-# signature made by any other workflow of this repository, or by this one on
-# another ref, does not verify. Started by hand with a tag, the job signs an
-# existing release from the branch it was started on; the identity then ends
-# in @refs/heads/<branch> and the provenance names the branch.
+# THE IDENTITY IS EXACT. It names this file and the ref the signing run ran
+# on, and nothing looser. Until 17 November 2026 it was a prefix,
+# '^https://github.com/heyvaldemar/<repo>/', and any workflow in the
+# repository matched it: a signature made by some other workflow, on any
+# branch, verified as a release. A release run runs on the tag, so the
+# identity ends in @refs/tags/<tag>, and its provenance names the tag.
+#
+# Started by hand with a tag, it signs an existing release: that is how the
+# releases before this job existed got the same three files. Such a run
+# runs on the branch it was started from, so it is refused anywhere but
+# main. Its identity ends in @refs/heads/main, and its provenance needs
+# --source-branch main where a release run's needs --source-tag.
 #
 # The last job runs both commands itself, on the files the release now
-# holds, shows each a copy of the archive with one byte appended, which
-# both must refuse, and checks the signature against another signer, which
-# cosign must refuse.
+# holds. It also shows each command a copy of the archive with one byte
+# appended, and each must refuse it for that reason, in its own words. A
+# refusal for any other reason (no network, Sigstore unreachable, a tool
+# missing) proves nothing, and the job fails on it.
 on:
   release:
     types: [published]
@@ -66,6 +76,14 @@ jobs:
         env:
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
+          # Provenance names the ref this run ran on. A run started by hand
+          # from a feature branch would attach to the release a statement that
+          # it was built from that branch, signed by that branch's copy of
+          # this file. So it runs from main or not at all.
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::started from $GITHUB_REF: a release is signed only from refs/heads/main, start it from main"
+            exit 1
+          fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "name=${GITHUB_REPOSITORY#*/}-$TAG" >> "$GITHUB_OUTPUT"
 
@@ -200,29 +218,42 @@ jobs:
         run: |
           NAME="${GITHUB_REPOSITORY#*/}-$TAG"
           cd out
-          # The exact signer: this workflow file on the ref the signing run used.
+          # The one identity this run signed with: this file, on the ref the
+          # run ran on (the tag for a release, main for a run started by hand).
           sig=(--certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release-assets.yml@${GITHUB_REF}"
                --certificate-oidc-issuer https://token.actions.githubusercontent.com)
-          # A release run ran on the tag, so its provenance names the tag; a
-          # run started by hand ran on a branch, and names that instead.
-          if [ "$EVENT" = release ]; then src=(--source-tag "$TAG"); else src=(--source-branch "$GITHUB_REF_NAME"); fi
+          if [ "$EVENT" = release ]; then src=(--source-tag "$TAG"); else src=(--source-branch main); fi
 
           cosign verify-blob "$NAME.tar.gz" --bundle "$NAME.tar.gz.sigstore.json" "${sig[@]}"
           slsa-verifier verify-artifact "$NAME.tar.gz" --provenance-path "$NAME.intoto.jsonl" \
             --source-uri "github.com/$GITHUB_REPOSITORY" "${src[@]}"
 
+          # refuses <tool> <its words for a changed artifact> <command...>
+          # The changed archive must be refused, and refused because it
+          # changed. A tool that cannot reach Sigstore, or is not installed,
+          # also exits non-zero, and until 17 November 2026 this step read
+          # that as a refusal and went green with nothing checked. The words
+          # are those of cosign v3.1 and slsa-verifier v2.7: a tool update
+          # that rewords them turns this red, which is the safe way to find out.
+          refuses() {
+            local tool="$1" words="$2" out rc=0
+            shift 2
+            out="$("$@" 2>&1)" || rc=$?
+            if [ "$rc" -eq 0 ]; then
+              echo "::error::$tool accepted the archive with one byte appended"; exit 1
+            fi
+            case "$out" in
+              *"$words"*) echo "$tool refused the changed archive: $words" ;;
+              *) printf '%s\n' "$out" | tail -n 5
+                 echo "::error::$tool exited $rc on the changed archive without saying it changed; a refusal for another reason proves nothing"
+                 exit 1 ;;
+            esac
+          }
           cp "$NAME.tar.gz" changed.tar.gz
           printf 'x' >> changed.tar.gz
-          if cosign verify-blob changed.tar.gz --bundle "$NAME.tar.gz.sigstore.json" "${sig[@]}"; then
-            echo "::error::cosign accepted the archive with one byte appended"; exit 1
-          fi
-          if slsa-verifier verify-artifact changed.tar.gz --provenance-path "$NAME.intoto.jsonl" \
-               --source-uri "github.com/$GITHUB_REPOSITORY" "${src[@]}"; then
-            echo "::error::slsa-verifier accepted the archive with one byte appended"; exit 1
-          fi
-          if cosign verify-blob "$NAME.tar.gz" --bundle "$NAME.tar.gz.sigstore.json" \
-               --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/ci.yml@${GITHUB_REF}" \
-               --certificate-oidc-issuer https://token.actions.githubusercontent.com; then
-            echo "::error::cosign accepted the signature for a signer other than release-assets.yml"; exit 1
-          fi
-          echo "the release verifies, a changed copy of its archive does not, and no other signer is accepted"
+          refuses cosign "invalid signature when validating ASN.1 encoded signature" \
+            cosign verify-blob changed.tar.gz --bundle "$NAME.tar.gz.sigstore.json" "${sig[@]}"
+          refuses slsa-verifier "artifact hash does not match provenance subject" \
+            slsa-verifier verify-artifact changed.tar.gz --provenance-path "$NAME.intoto.jsonl" \
+              --source-uri "github.com/$GITHUB_REPOSITORY" "${src[@]}"
+          echo "the release verifies, and a changed copy of its archive is refused for being changed"
