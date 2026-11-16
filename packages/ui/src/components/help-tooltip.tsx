@@ -144,10 +144,6 @@ export const HelpTooltips = {
     <HelpTooltip content="Each call to OpenAI, Anthropic, or Google counts as one request. Streaming responses count as one request." />
   ),
   
-  overage: () => (
-    <HelpTooltip content="Requests beyond your plan tier's monthly cap are rejected until the cap resets, unless the operator raises the tier or bills overage through the optional Stripe module." />
-  ),
-  
   // Features
   dlpScanner: () => (
     <HelpTooltip content={

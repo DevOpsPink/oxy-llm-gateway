@@ -214,7 +214,7 @@ function DashboardPreview() {
                 <DollarSign className="h-3.5 w-3.5 text-slate-400" />
               </div>
               <div className="text-2xl font-semibold text-slate-900 tracking-tight">$127.50</div>
-              <div className="text-[11px] text-slate-500 mt-1">of $500.00 monthly cap</div>
+              <div className="text-[11px] text-slate-500 mt-1">of a $500.00 budget</div>
               <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
