@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- The dashboard says why a 402 came back. Every 402 opened a "Subscription Required" notice with an Update Billing button, but on the default stack a 402 means a project has spent its whole budget, and nothing resets a budget. A `BUDGET_EXCEEDED` answer now opens "Budget spent" and says to raise the budget in the project's settings; any other 402 keeps the billing notice (`paymentRequiredNotice`, with a Vitest test).
+
 ## [1.0.6] - 2026-11-22
 
 Four defects that running the lab and reading the answers found, and three more of the same shape that fixing them turned up. Each has a test that fails on 1.0.5; the kill proof gained a check and a planted violation of its own.
